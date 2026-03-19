@@ -63,10 +63,13 @@ func DiscoverAgentsInRegistry(registry models.Registry) ([]models.Agent, error) 
 	}
 
 	agentsPath := filepath.Join(registryPath, ".opencode", "agents")
+	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
+		agentsPath = filepath.Join(registryPath, ".opencode", "agent")
+	}
 	return listAgentsInDir(agentsPath, registry)
 }
 
-// listAgentsInDir lists all agent .md files in a directory.
+// listAgentsInDir lists all agent .md files in a directory, recursing into subdirectories.
 func listAgentsInDir(dir string, registry models.Registry) ([]models.Agent, error) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return nil, nil
@@ -79,7 +82,13 @@ func listAgentsInDir(dir string, registry models.Registry) ([]models.Agent, erro
 
 	var found []models.Agent
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
+		if entry.IsDir() {
+			sub, err := listAgentsInDir(filepath.Join(dir, entry.Name()), registry)
+			if err != nil {
+				return nil, err
+			}
+			found = append(found, sub...)
+		} else if strings.HasSuffix(entry.Name(), ".md") {
 			name := strings.TrimSuffix(entry.Name(), ".md")
 			found = append(found, models.Agent{
 				Name:       name,

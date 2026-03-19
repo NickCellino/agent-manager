@@ -640,10 +640,10 @@ func addGitHubRegistryForAgentsOrSkip(t *testing.T, env *testEnv) (string, strin
 	var agentName string
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "[github:") || line == "" {
+		// Agent lines look like: "agent-name [github: darrenhinde/OpenAgentsControl]"
+		if !strings.Contains(line, "[github:") {
 			continue
 		}
-		// lines look like: "  agent-name [github: darrenhinde/OpenAgentsControl]"
 		parts := strings.Fields(line)
 		if len(parts) > 0 && !strings.HasPrefix(parts[0], "[") {
 			agentName = parts[0]
