@@ -3,16 +3,18 @@ package main
 import (
 	"os"
 
+	"agent-manager/commands"
 	"github.com/urfave/cli/v2"
-	"my-cli/commands"
 )
 
 func main() {
 	app := &cli.App{
-		Name:  "my-cli",
-		Usage: "A simple CLI application",
+		Name:    "agent-manager",
+		Usage:   "Manage opencode skills and registries",
+		Version: "0.1.0",
 		Commands: []*cli.Command{
-			commands.HelloCommand(),
+			commands.SkillsCommand(),
+			commands.RegistryCommand(),
 		},
 	}
 

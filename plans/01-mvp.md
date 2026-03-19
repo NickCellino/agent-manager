@@ -61,3 +61,35 @@ For any unselected skills: these will be deleted if the user confirms. Prompt th
 Note: The multi-select menu will only list skills that are contained within the registries. If there are skills in .opencode/skills
 that I've defined locally within this project, they will not be in the list (unless by chance there happens to be a skill with the same
 name in the registries). This is fine - we do not want this CLI to manage these skills' lifecycle.
+
+---
+
+## Technical Decisions
+
+### Technology Stack
+- **Language**: Go
+- **CLI Framework**: urfave/cli
+- **TUI Framework**: Bubble Tea (charmbracelet/bubbletea)
+- **TUI Style**: Simple interactive list (similar to fzf)
+  - Arrow keys to navigate
+  - Spacebar to toggle selection
+  - Enter to confirm
+  - Real-time filtering as user types
+
+### Implementation Notes
+
+#### Version/Tag Support
+- **Decision**: Not supported in MVP
+- Skills always use the default branch (main/master) of the registry repository
+
+#### Updates
+- **Decision**: No automatic update mechanism in MVP
+- Users can manually remove and re-add skills to get updates
+- Future enhancement: version tracking and update notifications
+
+#### Testing Strategy
+- Use isolated XDG_DATA_HOME for testing via PTY tool
+- E2E tests run with custom XDG_DATA_HOME to avoid touching real user data
+- Example: `XDG_DATA_HOME=/tmp/agent-manager-test go run ./...`
+
+This approach ensures clean test isolation while maintaining production fidelity.
