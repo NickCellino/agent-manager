@@ -1,42 +1,77 @@
-# skill-manager
+# my-cli
 
-[![PyPI](https://img.shields.io/pypi/v/skill-manager.svg)](https://pypi.org/project/skill-manager/)
-[![Changelog](https://img.shields.io/github/v/release/NickCellino/skill-manager?include_prereleases&label=changelog)](https://github.com/NickCellino/skill-manager/releases)
-[![Tests](https://github.com/NickCellino/skill-manager/actions/workflows/test.yml/badge.svg)](https://github.com/NickCellino/skill-manager/actions/workflows/test.yml)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/NickCellino/skill-manager/blob/master/LICENSE)
+A simple CLI application built with Go, Bubble Tea, and urfave/cli.
 
-CLI tool to manage coding agent skills
+## Prerequisites
+
+- Go 1.21 or later
 
 ## Installation
 
-Install this tool using `uv`:
+### Build from source
+
 ```bash
-uv pip install skill-manager
+go build -o my-cli
 ```
+
+### Install to $GOPATH/bin
+
+```bash
+go install
+```
+
 ## Usage
 
-For help, run:
-```bash
-skill-manager --help
-```
-You can also use:
-```bash
-python -m skill_manager --help
-```
-## Development
+### Run directly
 
-To contribute to this tool, first checkout the code. Then create a new virtual environment:
 ```bash
-cd skill-manager
-uv venv
-source .venv/bin/activate
+go run . hello
 ```
-Now install the dependencies and test dependencies:
+
+### Run the binary
+
 ```bash
-uv pip install -e '.[test]'
+./my-cli hello
 ```
-To run the tests:
+
+The `hello` command will launch an interactive TUI that asks for your name and greets you.
+
+## Testing
+
+Run all tests:
+
 ```bash
-uv run pytest
+go test ./...
 ```
+
+Run tests with verbose output:
+
+```bash
+go test -v ./...
+```
+
+Run tests with coverage:
+
+```bash
+go test -cover ./...
+```
+
+## Project Structure
+
+```
+my-cli/
+├── main.go           # Entry point with urfave/cli
+├── commands/
+│   ├── hello.go      # Bubbletea TUI model for hello command
+│   └── hello_test.go # Tests for Update/View logic
+├── go.mod
+└── go.sum
+```
+
+## Adding New Commands
+
+1. Create a new file in `commands/` directory
+2. Define your bubbletea model and command function
+3. Export a function that returns `*cli.Command`
+4. Register the command in `main.go`
 
