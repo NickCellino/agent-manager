@@ -14,12 +14,12 @@ import (
 	"agent-manager/internal/storage"
 )
 
-// Shared styles (also defined in registry.go)
+// Shared list styles used by both the skills and agents TUIs
 var (
-	skillsTitleStyle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA")).Background(lipgloss.Color("#7D56F4")).Padding(0, 1)
-	skillsItemStyle         = lipgloss.NewStyle()
-	skillsSelectedItemStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("170"))
-	skillsHelpStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	listTitleStyle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA")).Background(lipgloss.Color("#7D56F4")).Padding(0, 1)
+	listItemStyle         = lipgloss.NewStyle()
+	listSelectedItemStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("170"))
+	listHelpStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 )
 
 // SkillsModel manages the skills selection TUI
@@ -352,7 +352,7 @@ func (m *SkillsModel) viewSelect() string {
 	var b strings.Builder
 
 	// Title
-	b.WriteString(skillsTitleStyle.Render("Select Skills") + "\n")
+	b.WriteString(listTitleStyle.Render("Select Skills") + "\n")
 
 	// Filter input - show focused state
 	if m.inputMode == "filter" {
@@ -360,7 +360,7 @@ func (m *SkillsModel) viewSelect() string {
 	} else {
 		// Show placeholder when not in filter mode
 		if m.textInput.Value() == "" {
-			b.WriteString("Filter: " + skillsHelpStyle.Render("press / to filter") + "\n")
+			b.WriteString("Filter: " + listHelpStyle.Render("press / to filter") + "\n")
 		} else {
 			b.WriteString("Filter: " + m.textInput.View() + "\n")
 		}
@@ -385,9 +385,9 @@ func (m *SkillsModel) viewSelect() string {
 			line := fmt.Sprintf("%s%s %s %s", cursor, checked, skill.Name, formatRegistryDisplay(skill.Registry))
 
 			if i == m.cursor {
-				b.WriteString(skillsSelectedItemStyle.Render(line) + "\n")
+				b.WriteString(listSelectedItemStyle.Render(line) + "\n")
 			} else {
-				b.WriteString(skillsItemStyle.Render(line) + "\n")
+				b.WriteString(listItemStyle.Render(line) + "\n")
 			}
 		}
 	}
@@ -397,9 +397,9 @@ func (m *SkillsModel) viewSelect() string {
 
 	// Help - different based on input mode
 	if m.inputMode == "filter" {
-		b.WriteString("\n" + skillsHelpStyle.Render("esc: exit filter  type to search"))
+		b.WriteString("\n" + listHelpStyle.Render("esc: exit filter  type to search"))
 	} else {
-		b.WriteString("\n" + skillsHelpStyle.Render("/: filter  ↑/↓/j/k: navigate  space: toggle  enter: save  esc: cancel"))
+		b.WriteString("\n" + listHelpStyle.Render("/: filter  ↑/↓/j/k: navigate  space: toggle  enter: save  esc: cancel"))
 	}
 
 	return b.String()
@@ -408,14 +408,14 @@ func (m *SkillsModel) viewSelect() string {
 func (m *SkillsModel) viewConfirmDelete() string {
 	var b strings.Builder
 
-	b.WriteString(skillsTitleStyle.Render("Confirm Deletion") + "\n\n")
+	b.WriteString(listTitleStyle.Render("Confirm Deletion") + "\n\n")
 	b.WriteString("The following skills will be removed:\n\n")
 
 	for _, skillName := range m.skillsToDelete {
 		b.WriteString(fmt.Sprintf("  - %s\n", skillName))
 	}
 
-	b.WriteString("\n" + skillsHelpStyle.Render("y: confirm  n: cancel"))
+	b.WriteString("\n" + listHelpStyle.Render("y: confirm  n: cancel"))
 
 	return b.String()
 }

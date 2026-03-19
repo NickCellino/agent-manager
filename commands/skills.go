@@ -80,7 +80,7 @@ Use subcommands for non-interactive operation:
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "registry",
-						Usage: "Registry to install from (format: type:location, e.g. github:NickCellino/laptop-setup)",
+						Usage: "Registry to install from (format: type:location, e.g. github:darrenhinde/OpenAgentsControl)",
 					},
 				},
 				Description: `Add a skill to the current project by name.
@@ -89,7 +89,7 @@ If multiple registries contain a skill with the same name, use --registry to spe
 
 Examples:
   agent-manager skills add my-skill
-  agent-manager skills add --registry github:NickCellino/laptop-setup my-skill`,
+  agent-manager skills add --registry github:darrenhinde/OpenAgentsControl my-skill`,
 				Action: func(c *cli.Context) error {
 					if c.NArg() < 1 {
 						return fmt.Errorf("usage: agent-manager skills add <name>")

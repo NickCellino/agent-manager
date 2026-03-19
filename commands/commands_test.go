@@ -428,17 +428,17 @@ func TestSkillsAdd_MultipleRegistries_WithFlag(t *testing.T) {
 
 // ---- GitHub Registry tests ----
 
-// addGitHubRegistryOrSkip adds the NickCellino/laptop-setup GitHub registry to env,
-// then runs `skills list` to trigger a clone of the repo.  If the "playground" skill
+// addGitHubRegistryOrSkip adds the darrenhinde/OpenAgentsControl GitHub registry to env,
+// then runs `skills list` to trigger a clone of the repo.  If the "context-manager" skill
 // does not appear in the output (e.g. the repo is private or network is unavailable),
 // the test is skipped gracefully.  On success it returns the `skills list` stdout so
 // the caller can make additional assertions without running the command a second time.
 func addGitHubRegistryOrSkip(t *testing.T, env *testEnv) string {
 	t.Helper()
-	env.run("registry", "add", "github", "NickCellino/laptop-setup")
+	env.run("registry", "add", "github", "darrenhinde/OpenAgentsControl")
 	out, errOut, _ := env.run("skills", "list")
-	if !strings.Contains(out, "playground") {
-		t.Skipf("NickCellino/laptop-setup not accessible or 'playground' skill not found; skipping GitHub registry test.\nstdout: %s\nstderr: %s", out, errOut)
+	if !strings.Contains(out, "context-manager") {
+		t.Skipf("darrenhinde/OpenAgentsControl not accessible or 'context-manager' skill not found; skipping GitHub registry test.\nstdout: %s\nstderr: %s", out, errOut)
 	}
 	return out
 }
@@ -446,15 +446,15 @@ func addGitHubRegistryOrSkip(t *testing.T, env *testEnv) string {
 func TestRegistryAdd_GitHub(t *testing.T) {
 	env := newTestEnv(t)
 
-	out, _, code := env.run("registry", "add", "github", "NickCellino/laptop-setup")
+	out, _, code := env.run("registry", "add", "github", "darrenhinde/OpenAgentsControl")
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
 	if !strings.Contains(out, "Added github registry") {
 		t.Errorf("expected 'Added github registry' in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "NickCellino/laptop-setup") {
-		t.Errorf("expected 'NickCellino/laptop-setup' in output, got:\n%s", out)
+	if !strings.Contains(out, "darrenhinde/OpenAgentsControl") {
+		t.Errorf("expected 'darrenhinde/OpenAgentsControl' in output, got:\n%s", out)
 	}
 
 	// Verify it appears in the list (no network needed — registry config is local)
@@ -462,8 +462,8 @@ func TestRegistryAdd_GitHub(t *testing.T) {
 	if !strings.Contains(listOut, "[github]") {
 		t.Errorf("expected '[github]' in registry list output, got:\n%s", listOut)
 	}
-	if !strings.Contains(listOut, "NickCellino/laptop-setup") {
-		t.Errorf("expected 'NickCellino/laptop-setup' in registry list output, got:\n%s", listOut)
+	if !strings.Contains(listOut, "darrenhinde/OpenAgentsControl") {
+		t.Errorf("expected 'darrenhinde/OpenAgentsControl' in registry list output, got:\n%s", listOut)
 	}
 }
 
@@ -471,10 +471,10 @@ func TestSkillsList_GitHub(t *testing.T) {
 	env := newTestEnv(t)
 	out := addGitHubRegistryOrSkip(t, env)
 
-	// addGitHubRegistryOrSkip already verified "playground" is present; also check
+	// addGitHubRegistryOrSkip already verified "context-manager" is present; also check
 	// that the registry type and location are shown for that skill.
-	if !strings.Contains(out, "[github: NickCellino/laptop-setup]") {
-		t.Errorf("expected '[github: NickCellino/laptop-setup]' in skills list output, got:\n%s", out)
+	if !strings.Contains(out, "[github: darrenhinde/OpenAgentsControl]") {
+		t.Errorf("expected '[github: darrenhinde/OpenAgentsControl]' in skills list output, got:\n%s", out)
 	}
 }
 
@@ -482,19 +482,19 @@ func TestSkillsAdd_GitHub(t *testing.T) {
 	env := newTestEnv(t)
 	addGitHubRegistryOrSkip(t, env)
 
-	out, _, code := env.run("skills", "add", "playground")
+	out, _, code := env.run("skills", "add", "context-manager")
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
 	}
-	if !strings.Contains(out, `Installed skill "playground"`) {
-		t.Errorf("expected 'Installed skill \"playground\"' in output, got:\n%s", out)
+	if !strings.Contains(out, `Installed skill "context-manager"`) {
+		t.Errorf("expected 'Installed skill \"context-manager\"' in output, got:\n%s", out)
 	}
 
 	// GitHub registries copy the skill directory (not a symlink)
-	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "playground")
+	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "context-manager")
 	info, err := os.Lstat(installedPath)
 	if err != nil {
-		t.Fatalf("expected playground skill to exist at %s: %v", installedPath, err)
+		t.Fatalf("expected context-manager skill to exist at %s: %v", installedPath, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		t.Errorf("expected a regular directory (not symlink) for a GitHub registry skill at %s", installedPath)
@@ -505,26 +505,26 @@ func TestSkillsRemove_GitHub(t *testing.T) {
 	env := newTestEnv(t)
 	addGitHubRegistryOrSkip(t, env)
 
-	env.run("skills", "add", "playground")
+	env.run("skills", "add", "context-manager")
 
-	out, _, code := env.run("skills", "remove", "playground")
+	out, _, code := env.run("skills", "remove", "context-manager")
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
 	}
-	if !strings.Contains(out, `Removed skill "playground"`) {
-		t.Errorf("expected 'Removed skill \"playground\"' in output, got:\n%s", out)
+	if !strings.Contains(out, `Removed skill "context-manager"`) {
+		t.Errorf("expected 'Removed skill \"context-manager\"' in output, got:\n%s", out)
 	}
 
 	// Verify the skill directory was removed from the filesystem
-	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "playground")
+	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "context-manager")
 	if _, err := os.Lstat(installedPath); !os.IsNotExist(err) {
-		t.Errorf("expected playground skill to be absent at %s after removal", installedPath)
+		t.Errorf("expected context-manager skill to be absent at %s after removal", installedPath)
 	}
 
 	// Verify it's no longer in the installed list
 	installedOut, _, _ := env.run("skills", "installed")
-	if strings.Contains(installedOut, "playground") {
-		t.Errorf("expected 'playground' to be absent from installed list after removal, got:\n%s", installedOut)
+	if strings.Contains(installedOut, "context-manager") {
+		t.Errorf("expected 'context-manager' to be absent from installed list after removal, got:\n%s", installedOut)
 	}
 }
 
@@ -532,23 +532,23 @@ func TestFullGitHubRegistryWorkflow(t *testing.T) {
 	env := newTestEnv(t)
 	addGitHubRegistryOrSkip(t, env)
 
-	// Install the playground skill
-	env.run("skills", "add", "playground")
+	// Install the context-manager skill
+	env.run("skills", "add", "context-manager")
 
 	// Verify it appears in the installed list
 	installedOut, _, code := env.run("skills", "installed")
 	if code != 0 {
 		t.Fatalf("skills installed: expected exit 0, got %d", code)
 	}
-	if !strings.Contains(installedOut, "playground") {
-		t.Errorf("expected 'playground' in installed list, got:\n%s", installedOut)
+	if !strings.Contains(installedOut, "context-manager") {
+		t.Errorf("expected 'context-manager' in installed list, got:\n%s", installedOut)
 	}
-	if !strings.Contains(installedOut, "[github: NickCellino/laptop-setup]") {
+	if !strings.Contains(installedOut, "[github: darrenhinde/OpenAgentsControl]") {
 		t.Errorf("expected registry info in installed list, got:\n%s", installedOut)
 	}
 
 	// Installing again should be idempotent
-	idempotentOut, _, idempotentCode := env.run("skills", "add", "playground")
+	idempotentOut, _, idempotentCode := env.run("skills", "add", "context-manager")
 	if idempotentCode != 0 {
 		t.Fatalf("expected exit 0 on duplicate install, got %d", idempotentCode)
 	}
@@ -557,7 +557,7 @@ func TestFullGitHubRegistryWorkflow(t *testing.T) {
 	}
 
 	// Remove the skill
-	env.run("skills", "remove", "playground")
+	env.run("skills", "remove", "context-manager")
 
 	// Nothing should be installed
 	afterRemove, _, _ := env.run("skills", "installed")
@@ -600,5 +600,339 @@ func TestFullRegistryAndSkillsWorkflow(t *testing.T) {
 	afterRemove, _, _ := env.run("skills", "installed")
 	if !strings.Contains(afterRemove, "No skills managed") {
 		t.Errorf("expected 'No skills managed' after removal, got:\n%s", afterRemove)
+	}
+}
+
+// ---- Agents helpers ----
+
+// makeLocalRegistryWithAgents creates a temporary directory structured as an agent registry
+// and populates it with .md files for each named agent.
+func makeLocalRegistryWithAgents(t *testing.T, agentNames ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, name := range agentNames {
+		agentsDir := filepath.Join(dir, ".opencode", "agents")
+		if err := os.MkdirAll(agentsDir, 0755); err != nil {
+			t.Fatalf("makeLocalRegistryWithAgents: failed to create agents dir: %v", err)
+		}
+		agentFile := filepath.Join(agentsDir, name+".md")
+		content := "---\ndescription: " + name + "\nmode: subagent\n---\n\nYou are " + name + ".\n"
+		if err := os.WriteFile(agentFile, []byte(content), 0644); err != nil {
+			t.Fatalf("makeLocalRegistryWithAgents: failed to write agent file: %v", err)
+		}
+	}
+	return dir
+}
+
+// addGitHubRegistryForAgentsOrSkip adds the darrenhinde/OpenAgentsControl GitHub registry to env,
+// then runs `agents list` to trigger a clone of the repo. If no agent appears in the output
+// (e.g. network is unavailable or the repo has no agents), the test is skipped gracefully.
+// On success it returns the `agents list` stdout.
+func addGitHubRegistryForAgentsOrSkip(t *testing.T, env *testEnv) (string, string) {
+	t.Helper()
+	env.run("registry", "add", "github", "darrenhinde/OpenAgentsControl")
+	out, errOut, _ := env.run("agents", "list")
+	// The repo may not have any agents; if so, skip.
+	if strings.Contains(out, "No agents found") || !strings.Contains(out, "[github:") {
+		t.Skipf("darrenhinde/OpenAgentsControl has no agents or is not accessible; skipping GitHub agents test.\nstdout: %s\nstderr: %s", out, errOut)
+	}
+	// Extract any agent name from the output (first word of first agent line)
+	var agentName string
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		// Agent lines look like: "agent-name [github: darrenhinde/OpenAgentsControl]"
+		if !strings.Contains(line, "[github:") {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) > 0 && !strings.HasPrefix(parts[0], "[") {
+			agentName = parts[0]
+			break
+		}
+	}
+	if agentName == "" {
+		t.Skipf("Could not parse agent name from agents list output:\n%s", out)
+	}
+	return out, agentName
+}
+
+// ---- Agents tests ----
+
+func TestAgentsList_NoRegistries(t *testing.T) {
+	env := newTestEnv(t)
+	out, _, code := env.run("agents", "list")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "No agents found") {
+		t.Errorf("expected 'No agents found' in output, got:\n%s", out)
+	}
+}
+
+func TestAgentsList(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "agent-a", "agent-b")
+	env.run("registry", "add", "local", regDir)
+
+	out, _, code := env.run("agents", "list")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "agent-a") {
+		t.Errorf("expected 'agent-a' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "agent-b") {
+		t.Errorf("expected 'agent-b' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "2 total") {
+		t.Errorf("expected '2 total' in output, got:\n%s", out)
+	}
+}
+
+func TestAgentsInstalled_Empty(t *testing.T) {
+	env := newTestEnv(t)
+	out, _, code := env.run("agents", "installed")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "No agents managed") {
+		t.Errorf("expected 'No agents managed' in output, got:\n%s", out)
+	}
+}
+
+func TestAgentsAdd(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "my-agent")
+	env.run("registry", "add", "local", regDir)
+
+	out, _, code := env.run("agents", "add", "my-agent")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, `Installed agent "my-agent"`) {
+		t.Errorf("expected 'Installed agent' in output, got:\n%s", out)
+	}
+
+	// Verify the agent .md file was created on the filesystem
+	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", "my-agent.md")
+	if _, err := os.Lstat(installedPath); os.IsNotExist(err) {
+		t.Errorf("expected agent to exist at %s after install", installedPath)
+	}
+}
+
+func TestAgentsInstalled_AfterAdd(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "my-agent")
+	env.run("registry", "add", "local", regDir)
+	env.run("agents", "add", "my-agent")
+
+	out, _, code := env.run("agents", "installed")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "my-agent") {
+		t.Errorf("expected 'my-agent' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "1 total") {
+		t.Errorf("expected '1 total' in output, got:\n%s", out)
+	}
+}
+
+func TestAgentsAdd_AlreadyInstalled(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "my-agent")
+	env.run("registry", "add", "local", regDir)
+	env.run("agents", "add", "my-agent") // first install
+
+	out, _, code := env.run("agents", "add", "my-agent") // second install
+	if code != 0 {
+		t.Fatalf("expected exit 0 (idempotent), got %d", code)
+	}
+	if !strings.Contains(out, "already installed") {
+		t.Errorf("expected 'already installed' in output, got:\n%s", out)
+	}
+}
+
+func TestAgentsAdd_NotFound(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "other-agent")
+	env.run("registry", "add", "local", regDir)
+
+	_, errOut, code := env.run("agents", "add", "nonexistent")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when agent not found")
+	}
+	if !strings.Contains(errOut, "not found") {
+		t.Errorf("expected 'not found' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestAgentsAdd_MissingArgs(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("agents", "add")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when agent name is missing")
+	}
+	if !strings.Contains(errOut, "usage:") {
+		t.Errorf("expected 'usage:' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestAgentsRemove(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "my-agent")
+	env.run("registry", "add", "local", regDir)
+	env.run("agents", "add", "my-agent")
+
+	out, _, code := env.run("agents", "remove", "my-agent")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, `Removed agent "my-agent"`) {
+		t.Errorf("expected 'Removed agent' in output, got:\n%s", out)
+	}
+
+	// Verify the agent .md file was removed from the filesystem
+	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", "my-agent.md")
+	if _, err := os.Lstat(installedPath); !os.IsNotExist(err) {
+		t.Errorf("expected agent to be absent at %s after removal", installedPath)
+	}
+
+	// Verify it's no longer in the installed list
+	listOut, _, _ := env.run("agents", "installed")
+	if !strings.Contains(listOut, "No agents managed") {
+		t.Errorf("expected 'No agents managed' after removal, list output:\n%s", listOut)
+	}
+}
+
+func TestAgentsRemove_NotManaged(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("agents", "remove", "nonexistent")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when removing unmanaged agent")
+	}
+	if !strings.Contains(errOut, "not managed") {
+		t.Errorf("expected 'not managed' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestAgentsRemove_MissingArgs(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("agents", "remove")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when agent name is missing")
+	}
+	if !strings.Contains(errOut, "usage:") {
+		t.Errorf("expected 'usage:' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestAgentsAdd_MultipleRegistries_RequiresFlag(t *testing.T) {
+	env := newTestEnv(t)
+	reg1 := makeLocalRegistryWithAgents(t, "shared-agent")
+	reg2 := makeLocalRegistryWithAgents(t, "shared-agent")
+	env.run("registry", "add", "local", reg1)
+	env.run("registry", "add", "local", reg2)
+
+	_, errOut, code := env.run("agents", "add", "shared-agent")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when agent exists in multiple registries without --registry flag")
+	}
+	if !strings.Contains(errOut, "--registry") {
+		t.Errorf("expected '--registry' hint in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestAgentsAdd_MultipleRegistries_WithFlag(t *testing.T) {
+	env := newTestEnv(t)
+	reg1 := makeLocalRegistryWithAgents(t, "shared-agent")
+	reg2 := makeLocalRegistryWithAgents(t, "shared-agent")
+	env.run("registry", "add", "local", reg1)
+	env.run("registry", "add", "local", reg2)
+
+	out, _, code := env.run("agents", "add", "--registry", "local:"+reg1, "shared-agent")
+	if code != 0 {
+		t.Fatalf("expected exit 0 with --registry flag, got %d", code)
+	}
+	if !strings.Contains(out, `Installed agent "shared-agent"`) {
+		t.Errorf("expected 'Installed agent' in output, got:\n%s", out)
+	}
+}
+
+func TestAgentsAdd_GitHub(t *testing.T) {
+	env := newTestEnv(t)
+	_, agentName := addGitHubRegistryForAgentsOrSkip(t, env)
+
+	out, _, code := env.run("agents", "add", agentName)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, fmt.Sprintf(`Installed agent "%s"`, agentName)) {
+		t.Errorf("expected 'Installed agent %q' in output, got:\n%s", agentName, out)
+	}
+
+	// GitHub registries copy the agent file (not a symlink)
+	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", agentName+".md")
+	info, err := os.Lstat(installedPath)
+	if err != nil {
+		t.Fatalf("expected agent file to exist at %s: %v", installedPath, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Errorf("expected a regular file (not symlink) for a GitHub registry agent at %s", installedPath)
+	}
+}
+
+func TestAgentsRemove_GitHub(t *testing.T) {
+	env := newTestEnv(t)
+	_, agentName := addGitHubRegistryForAgentsOrSkip(t, env)
+
+	env.run("agents", "add", agentName)
+
+	out, _, code := env.run("agents", "remove", agentName)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, fmt.Sprintf(`Removed agent "%s"`, agentName)) {
+		t.Errorf("expected 'Removed agent %q' in output, got:\n%s", agentName, out)
+	}
+
+	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", agentName+".md")
+	if _, err := os.Lstat(installedPath); !os.IsNotExist(err) {
+		t.Errorf("expected agent file to be absent at %s after removal", installedPath)
+	}
+}
+
+func TestFullRegistryAndAgentsWorkflow(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "alpha", "beta")
+
+	// Add registry
+	env.run("registry", "add", "local", regDir)
+
+	// Both agents are listed
+	listOut, _, _ := env.run("agents", "list")
+	if !strings.Contains(listOut, "alpha") || !strings.Contains(listOut, "beta") {
+		t.Errorf("expected both agents in list, got:\n%s", listOut)
+	}
+
+	// Install alpha
+	env.run("agents", "add", "alpha")
+
+	// Only alpha is installed
+	installedOut, _, _ := env.run("agents", "installed")
+	if !strings.Contains(installedOut, "alpha") {
+		t.Errorf("expected alpha in installed list, got:\n%s", installedOut)
+	}
+	if strings.Contains(installedOut, "beta") {
+		t.Errorf("did not expect beta in installed list, got:\n%s", installedOut)
+	}
+
+	// Remove alpha
+	env.run("agents", "remove", "alpha")
+
+	// Nothing installed
+	afterRemove, _, _ := env.run("agents", "installed")
+	if !strings.Contains(afterRemove, "No agents managed") {
+		t.Errorf("expected 'No agents managed' after removal, got:\n%s", afterRemove)
 	}
 }

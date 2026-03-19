@@ -60,7 +60,7 @@ Type must be one of:
   local   Local directory (location format: /absolute/path or ~/relative/path)
 
 Examples:
-  agent-manager registry add github NickCellino/laptop-setup
+  agent-manager registry add github darrenhinde/OpenAgentsControl
   agent-manager registry add local ~/Code/skills`,
 				Action: func(c *cli.Context) error {
 					if c.NArg() < 2 {
@@ -94,7 +94,7 @@ Examples:
 				Description: `Remove an existing skill registry.
 
 Examples:
-  agent-manager registry remove github NickCellino/laptop-setup
+  agent-manager registry remove github darrenhinde/OpenAgentsControl
   agent-manager registry remove local ~/Code/skills`,
 				Action: func(c *cli.Context) error {
 					if c.NArg() < 2 {
