@@ -104,7 +104,7 @@ func GetGitCommit(repoPath string) (string, error) {
 }
 
 // SanitizeRegistryLocation converts a registry location to a filesystem-safe string
-// e.g., "NickCellino/laptop-setup" -> "nickcellino-laptop-setup"
+// e.g., "darrenhinde/OpenAgentsControl" -> "darrenhinde-openagentscontrol"
 func SanitizeRegistryLocation(location string) string {
 	// Convert to lowercase
 	sanitized := strings.ToLower(location)

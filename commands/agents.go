@@ -80,7 +80,7 @@ Use subcommands for non-interactive operation:
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "registry",
-						Usage: "Registry to install from (format: type:location, e.g. github:NickCellino/laptop-setup)",
+						Usage: "Registry to install from (format: type:location, e.g. github:darrenhinde/OpenAgentsControl)",
 					},
 				},
 				Description: `Add an agent to the current project by name.
@@ -89,7 +89,7 @@ If multiple registries contain an agent with the same name, use --registry to sp
 
 Examples:
   agent-manager agents add my-agent
-  agent-manager agents add --registry github:NickCellino/laptop-setup my-agent`,
+  agent-manager agents add --registry github:darrenhinde/OpenAgentsControl my-agent`,
 				Action: func(c *cli.Context) error {
 					if c.NArg() < 1 {
 						return fmt.Errorf("usage: agent-manager agents add <name>")
