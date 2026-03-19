@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -253,27 +252,14 @@ func (m *SkillsModel) updateNavigateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *SkillsModel) updateConfirmDeleteMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y":
-		// Delete the skills
-		skillsDir, err := skills.EnsureProjectSkillsDir()
-		if err != nil {
-			m.err = err
-			return m, tea.Quit
-		}
-
 		for _, skillPath := range m.skillsToDelete {
-			// Remove from filesystem
-			if err := skills.RemoveSkill(skillPath, skillsDir); err != nil {
-				m.err = err
-				return m, tea.Quit
-			}
-
-			// Remove from lock file
 			entry := storage.GetManagedSkillEntry(m.lockFile, skillPath)
-			if entry != nil {
-				if err := storage.RemoveSkillFromLockFile(m.lockFile, entry.Name, entry.Registry); err != nil {
-					// Log but continue
-					fmt.Printf("Warning: failed to remove %s from lock file: %v\n", entry.Name, err)
-				}
+			if entry == nil {
+				continue
+			}
+			if err := skills.RemoveSkillFromProject(entry, m.lockFile); err != nil {
+				// Log but continue — don't abort if one removal fails
+				fmt.Printf("Warning: failed to remove %s: %v\n", entry.Name, err)
 			}
 		}
 
@@ -318,47 +304,17 @@ func (m *SkillsModel) applyFilter() {
 }
 
 func (m *SkillsModel) saveSelections() error {
-	skillsDir, err := skills.EnsureProjectSkillsDir()
-	if err != nil {
-		return err
-	}
-
 	// Install newly selected skills (not already in lock file)
 	for _, skill := range m.allSkills {
 		skillKey := fmt.Sprintf("%s|%s|%s", skill.Name, skill.Registry.Type, skill.Registry.Location)
 		if m.selectedSkills[skillKey] {
-			// Check if already installed (managed)
-			existingEntry := storage.FindLockFileEntry(m.lockFile, skill.Name, skill.Registry)
-
 			// Skip if already managed - no need to reinstall
-			if existingEntry != nil {
+			if storage.FindLockFileEntry(m.lockFile, skill.Name, skill.Registry) != nil {
 				continue
 			}
 
-			// New skill - generate unique path (checking both lock file and filesystem)
-			installedPath := storage.GenerateInstalledPath(skill.Name, skill.Registry, m.lockFile, skillsDir)
-
-			// Install the skill with the target path
-			if err := skills.InstallSkill(skill, skillsDir, installedPath); err != nil {
-				return fmt.Errorf("failed to install skill %s: %w", skill.Name, err)
-			}
-
-			// Get commit hash for GitHub registries
-			var commit string
-			if skill.Registry.Type == models.RegistryTypeGitHub {
-				registryPath := getGitHubRegistryPath(skill.Registry.Location)
-				commit, _ = storage.GetGitCommit(registryPath)
-			}
-
-			// Add to lock file
-			entry := models.LockFileEntry{
-				Name:          skill.Name,
-				InstalledPath: installedPath,
-				Registry:      skill.Registry,
-				Commit:        commit,
-			}
-			if err := storage.AddSkillToLockFile(m.lockFile, entry); err != nil {
-				return fmt.Errorf("failed to update lock file for skill %s: %w", skill.Name, err)
+			if _, err := skills.AddSkillToProject(skill, m.lockFile); err != nil {
+				return err
 			}
 		}
 	}
@@ -366,27 +322,19 @@ func (m *SkillsModel) saveSelections() error {
 	// Check which installed skills are no longer selected
 	// Only consider managed skills (those in lock file)
 	for skillPath := range m.installedSkills {
-		// Check if this is a managed skill
 		entry := storage.GetManagedSkillEntry(m.lockFile, skillPath)
 		if entry == nil {
 			// Not managed - skip
 			continue
 		}
 
-		// Check if still selected
 		skillKey := fmt.Sprintf("%s|%s|%s", entry.Name, entry.Registry.Type, entry.Registry.Location)
 		if !m.selectedSkills[skillKey] {
 			m.skillsToDelete = append(m.skillsToDelete, skillPath)
-			// Don't remove from lock file yet - wait for confirmation
 		}
 	}
 
 	return nil
-}
-
-// getGitHubRegistryPath returns the local path for a GitHub registry
-func getGitHubRegistryPath(location string) string {
-	return filepath.Join(storage.GitHubRegistriesDir(), location)
 }
 
 func (m *SkillsModel) View() string {
