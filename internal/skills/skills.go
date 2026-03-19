@@ -237,6 +237,50 @@ func copyFile(src, dst string) error {
 	return os.Chmod(dst, info.Mode())
 }
 
+// AddSkillToProject installs a skill into the current project and records it in
+// the lock file. It handles path-collision detection and git commit tracking for
+// GitHub registries. The caller is responsible for checking whether the skill is
+// already present in the lock file before calling this function.
+// Returns the path name the skill was installed under.
+func AddSkillToProject(skill models.Skill, lockFile *models.LockFile) (string, error) {
+	skillsDir, err := EnsureProjectSkillsDir()
+	if err != nil {
+		return "", err
+	}
+
+	installedPath := storage.GenerateInstalledPath(skill.Name, skill.Registry, lockFile, skillsDir)
+
+	if err := InstallSkill(skill, skillsDir, installedPath); err != nil {
+		return "", fmt.Errorf("failed to install skill %s: %w", skill.Name, err)
+	}
+
+	var commit string
+	if skill.Registry.Type == models.RegistryTypeGitHub {
+		commit, _ = storage.GetGitCommit(getGitHubRegistryPath(skill.Registry.Location))
+	}
+
+	entry := models.LockFileEntry{
+		Name:          skill.Name,
+		InstalledPath: installedPath,
+		Registry:      skill.Registry,
+		Commit:        commit,
+	}
+	if err := storage.AddSkillToLockFile(lockFile, entry); err != nil {
+		return "", fmt.Errorf("failed to update lock file for skill %s: %w", skill.Name, err)
+	}
+
+	return installedPath, nil
+}
+
+// RemoveSkillFromProject removes a skill from the project filesystem and lock file.
+func RemoveSkillFromProject(entry *models.LockFileEntry, lockFile *models.LockFile) error {
+	skillsDir := GetProjectSkillsDir()
+	if err := RemoveSkill(entry.InstalledPath, skillsDir); err != nil {
+		return fmt.Errorf("failed to remove skill %q: %w", entry.Name, err)
+	}
+	return storage.RemoveSkillFromLockFile(lockFile, entry.Name, entry.Registry)
+}
+
 // GetProjectSkillsDir returns the path to the project's skills directory
 func GetProjectSkillsDir() string {
 	// First check for .opencode/skills
