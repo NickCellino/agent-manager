@@ -1,0 +1,28 @@
+[project]
+name = "skill-manager"
+version = "0.1"
+description = "CLI tool to manage coding agent skills"
+readme = "README.md"
+authors = [{name = "Nick Cellino"}]
+license = "Apache-2.0"
+requires-python = ">=3.10"
+classifiers = []
+dependencies = [
+    "click"
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+Homepage = "https://github.com/NickCellino/skill-manager"
+Changelog = "https://github.com/NickCellino/skill-manager/releases"
+Issues = "https://github.com/NickCellino/skill-manager/issues"
+CI = "https://github.com/NickCellino/skill-manager/actions"
+
+[project.scripts]
+skill-manager = "skill_manager.cli:cli"
+
+[project.optional-dependencies]
+test = ["pytest"]
