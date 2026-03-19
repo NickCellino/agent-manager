@@ -1,3 +1,12 @@
 {
-  "skills": []
+  "skills": [
+    {
+      "name": "shared-skill",
+      "installedPath": "shared-skill",
+      "registry": {
+        "type": "local",
+        "location": "/tmp/tmp.UDmj9Acxru"
+      }
+    }
+  ]
 }
