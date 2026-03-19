@@ -19,4 +19,4 @@ jobs:
           cache: true
 
       - name: Run tests
-        run: go test ./...
+        uses: robherley/go-test-action@v0
