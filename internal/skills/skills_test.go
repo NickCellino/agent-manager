@@ -32,7 +32,6 @@ func TestSkillDiscoveryAndInstallation(t *testing.T) {
 	store := &models.RegistryStore{
 		Registries: []models.Registry{
 			{
-				Name:     "test-registry",
 				Type:     models.RegistryTypeLocal,
 				Location: testRegistryDir,
 			},
@@ -59,7 +58,7 @@ func TestSkillDiscoveryAndInstallation(t *testing.T) {
 
 	// Test 2: Install skill
 	targetDir := t.TempDir()
-	if err := skills.InstallSkill(allSkills[0], targetDir); err != nil {
+	if err := skills.InstallSkill(allSkills[0], targetDir, ""); err != nil {
 		t.Fatalf("Failed to install skill: %v", err)
 	}
 

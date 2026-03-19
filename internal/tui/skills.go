@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -11,6 +12,7 @@ import (
 
 	"agent-manager/internal/models"
 	"agent-manager/internal/skills"
+	"agent-manager/internal/storage"
 )
 
 // Shared styles (also defined in registry.go)
@@ -26,17 +28,46 @@ type SkillsModel struct {
 	allSkills       []models.Skill
 	filteredSkills  []models.Skill
 	selectedSkills  map[string]bool
-	installedSkills map[string]bool // Skills already in .opencode/skills
+	installedSkills map[string]bool  // Skills already in .opencode/skills (by installedPath)
+	lockFile        *models.LockFile // Lock file for managed skills
 	textInput       textinput.Model
 	cursor          int
 	filter          string
 	mode            string // "select", "confirm-delete"
+	inputMode       string // "navigate", "filter"
 	skillsToDelete  []string
 	err             error
 	width           int
 	height          int
 	done            bool
 	saved           bool
+}
+
+// formatRegistryDisplay formats a registry for display
+// Shows last 2 components of location, truncated to 40 chars, colored
+func formatRegistryDisplay(registry models.Registry) string {
+	location := registry.Location
+
+	// Get last 2 components
+	parts := strings.Split(location, "/")
+	if len(parts) >= 2 {
+		location = parts[len(parts)-2] + "/" + parts[len(parts)-1]
+	}
+
+	// Truncate to 40 chars
+	if len(location) > 40 {
+		location = location[:37] + "..."
+	}
+
+	// Color based on registry type
+	color := "39" // default blue
+	if registry.Type == models.RegistryTypeGitHub {
+		color = "208" // orange for GitHub
+	} else {
+		color = "82" // green for local
+	}
+
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(fmt.Sprintf("(%s)", location))
 }
 
 // NewSkillsModel creates a new skills selection model
@@ -47,24 +78,38 @@ func NewSkillsModel() (*SkillsModel, error) {
 		return nil, err
 	}
 
-	// Get currently installed skills
+	// Load lock file - this is the source of truth for what skills are selected
+	lockFile, err := storage.LoadLockFile()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get currently installed skills from filesystem
+	// We only use this to detect unmanaged skills that exist but aren't tracked
 	installed, err := skills.ListInstalledSkills()
 	if err != nil {
 		return nil, err
 	}
 
+	// Track installed skills by their path name
 	installedSkills := make(map[string]bool)
+	for _, skillPath := range installed {
+		installedSkills[skillPath] = true
+	}
+
+	// Track selected skills - keyed by "skillName|registryType|registryLocation"
+	// The lock file is the source of truth - only select skills that are in the lock file
 	selectedSkills := make(map[string]bool)
 
-	for _, skillName := range installed {
-		installedSkills[skillName] = true
-		// Pre-select installed skills
-		selectedSkills[skillName] = true
+	// Mark skills from lock file as selected
+	for _, entry := range lockFile.Skills {
+		key := fmt.Sprintf("%s|%s|%s", entry.Name, entry.Registry.Type, entry.Registry.Location)
+		selectedSkills[key] = true
 	}
 
 	ti := textinput.New()
 	ti.Placeholder = "type to filter..."
-	ti.Focus()
+	// Don't focus by default - user must press '/' to activate filter
 	ti.CharLimit = 156
 	ti.Cursor.Style = lipgloss.NewStyle()
 	ti.Prompt = ""
@@ -74,8 +119,10 @@ func NewSkillsModel() (*SkillsModel, error) {
 		filteredSkills:  allSkills,
 		selectedSkills:  selectedSkills,
 		installedSkills: installedSkills,
+		lockFile:        lockFile,
 		textInput:       ti,
 		mode:            "select",
+		inputMode:       "navigate",
 	}, nil
 }
 
@@ -93,31 +140,41 @@ func (m *SkillsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch m.mode {
 		case "select":
-			return m.updateSelectMode(msg)
+			// Handle keys based on input mode
+			if m.inputMode == "filter" {
+				// In filter mode: ESC exits filter, everything else goes to textinput
+				switch msg.Type {
+				case tea.KeyEsc:
+					m.inputMode = "navigate"
+					m.textInput.Blur()
+					return m, nil
+				default:
+					// Pass to text input
+					var cmd tea.Cmd
+					oldValue := m.textInput.Value()
+					m.textInput, cmd = m.textInput.Update(msg)
+
+					// If filter changed, update filtered skills
+					if m.textInput.Value() != oldValue {
+						m.filter = m.textInput.Value()
+						m.applyFilter()
+					}
+
+					return m, cmd
+				}
+			} else {
+				// In navigate mode: handle navigation keys
+				return m.updateNavigateMode(msg)
+			}
 		case "confirm-delete":
 			return m.updateConfirmDeleteMode(msg)
 		}
 	}
 
-	// Update text input for filtering
-	if m.mode == "select" {
-		var cmd tea.Cmd
-		oldValue := m.textInput.Value()
-		m.textInput, cmd = m.textInput.Update(msg)
-
-		// If filter changed, update filtered skills
-		if m.textInput.Value() != oldValue {
-			m.filter = m.textInput.Value()
-			m.applyFilter()
-		}
-
-		return m, cmd
-	}
-
 	return m, nil
 }
 
-func (m *SkillsModel) updateSelectMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *SkillsModel) updateNavigateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		m.done = true
@@ -144,10 +201,11 @@ func (m *SkillsModel) updateSelectMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Toggle selection
 		if len(m.filteredSkills) > 0 && m.cursor < len(m.filteredSkills) {
 			skill := m.filteredSkills[m.cursor]
-			if m.selectedSkills[skill.Name] {
-				delete(m.selectedSkills, skill.Name)
+			skillKey := fmt.Sprintf("%s|%s|%s", skill.Name, skill.Registry.Type, skill.Registry.Location)
+			if m.selectedSkills[skillKey] {
+				delete(m.selectedSkills, skillKey)
 			} else {
-				m.selectedSkills[skill.Name] = true
+				m.selectedSkills[skillKey] = true
 			}
 		}
 		return m, nil
@@ -161,24 +219,32 @@ func (m *SkillsModel) updateSelectMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.KeyRunes:
-		// Vim-style navigation (j/k)
-		switch string(msg.Runes) {
-		case "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-			return m, nil
-		case "j":
-			if m.cursor < len(m.filteredSkills)-1 {
-				m.cursor++
-			}
-			return m, nil
-		}
-
 	case tea.KeyEsc:
+		// ESC in navigate mode quits
 		m.done = true
 		return m, tea.Quit
+
+	case tea.KeyRunes:
+		// Check for special keys first
+		if len(msg.Runes) == 1 {
+			switch msg.Runes[0] {
+			case '/':
+				// Activate filter mode
+				m.inputMode = "filter"
+				m.textInput.Focus()
+				return m, textinput.Blink
+			case 'k':
+				if m.cursor > 0 {
+					m.cursor--
+				}
+				return m, nil
+			case 'j':
+				if m.cursor < len(m.filteredSkills)-1 {
+					m.cursor++
+				}
+				return m, nil
+			}
+		}
 	}
 
 	return m, nil
@@ -194,10 +260,20 @@ func (m *SkillsModel) updateConfirmDeleteMode(msg tea.KeyMsg) (tea.Model, tea.Cm
 			return m, tea.Quit
 		}
 
-		for _, skillName := range m.skillsToDelete {
-			if err := skills.RemoveSkill(skillName, skillsDir); err != nil {
+		for _, skillPath := range m.skillsToDelete {
+			// Remove from filesystem
+			if err := skills.RemoveSkill(skillPath, skillsDir); err != nil {
 				m.err = err
 				return m, tea.Quit
+			}
+
+			// Remove from lock file
+			entry := storage.GetManagedSkillEntry(m.lockFile, skillPath)
+			if entry != nil {
+				if err := storage.RemoveSkillFromLockFile(m.lockFile, entry.Name, entry.Registry); err != nil {
+					// Log but continue
+					fmt.Printf("Warning: failed to remove %s from lock file: %v\n", entry.Name, err)
+				}
 			}
 		}
 
@@ -206,7 +282,8 @@ func (m *SkillsModel) updateConfirmDeleteMode(msg tea.KeyMsg) (tea.Model, tea.Cm
 		return m, tea.Quit
 
 	case "n", "N", "esc":
-		// Cancel deletion
+		// Cancel deletion - don't remove from lock file
+		m.saved = true
 		m.done = true
 		return m, tea.Quit
 	}
@@ -246,33 +323,70 @@ func (m *SkillsModel) saveSelections() error {
 		return err
 	}
 
-	// Install selected skills
+	// Install newly selected skills (not already in lock file)
 	for _, skill := range m.allSkills {
-		if m.selectedSkills[skill.Name] {
-			if err := skills.InstallSkill(skill, skillsDir); err != nil {
-				return err
+		skillKey := fmt.Sprintf("%s|%s|%s", skill.Name, skill.Registry.Type, skill.Registry.Location)
+		if m.selectedSkills[skillKey] {
+			// Check if already installed (managed)
+			existingEntry := storage.FindLockFileEntry(m.lockFile, skill.Name, skill.Registry)
+
+			// Skip if already managed - no need to reinstall
+			if existingEntry != nil {
+				continue
+			}
+
+			// New skill - generate unique path (checking both lock file and filesystem)
+			installedPath := storage.GenerateInstalledPath(skill.Name, skill.Registry, m.lockFile, skillsDir)
+
+			// Install the skill with the target path
+			if err := skills.InstallSkill(skill, skillsDir, installedPath); err != nil {
+				return fmt.Errorf("failed to install skill %s: %w", skill.Name, err)
+			}
+
+			// Get commit hash for GitHub registries
+			var commit string
+			if skill.Registry.Type == models.RegistryTypeGitHub {
+				registryPath := getGitHubRegistryPath(skill.Registry.Location)
+				commit, _ = storage.GetGitCommit(registryPath)
+			}
+
+			// Add to lock file
+			entry := models.LockFileEntry{
+				Name:          skill.Name,
+				InstalledPath: installedPath,
+				Registry:      skill.Registry,
+				Commit:        commit,
+			}
+			if err := storage.AddSkillToLockFile(m.lockFile, entry); err != nil {
+				return fmt.Errorf("failed to update lock file for skill %s: %w", skill.Name, err)
 			}
 		}
 	}
 
 	// Check which installed skills are no longer selected
-	for skillName := range m.installedSkills {
-		if !m.selectedSkills[skillName] {
-			// Check if this skill is from a registry (has a matching skill in allSkills)
-			isFromRegistry := false
-			for _, skill := range m.allSkills {
-				if skill.Name == skillName {
-					isFromRegistry = true
-					break
-				}
-			}
-			if isFromRegistry {
-				m.skillsToDelete = append(m.skillsToDelete, skillName)
-			}
+	// Only consider managed skills (those in lock file)
+	for skillPath := range m.installedSkills {
+		// Check if this is a managed skill
+		entry := storage.GetManagedSkillEntry(m.lockFile, skillPath)
+		if entry == nil {
+			// Not managed - skip
+			continue
+		}
+
+		// Check if still selected
+		skillKey := fmt.Sprintf("%s|%s|%s", entry.Name, entry.Registry.Type, entry.Registry.Location)
+		if !m.selectedSkills[skillKey] {
+			m.skillsToDelete = append(m.skillsToDelete, skillPath)
+			// Don't remove from lock file yet - wait for confirmation
 		}
 	}
 
 	return nil
+}
+
+// getGitHubRegistryPath returns the local path for a GitHub registry
+func getGitHubRegistryPath(location string) string {
+	return filepath.Join(storage.GitHubRegistriesDir(), location)
 }
 
 func (m *SkillsModel) View() string {
@@ -292,8 +406,17 @@ func (m *SkillsModel) viewSelect() string {
 	// Title
 	b.WriteString(skillsTitleStyle.Render("Select Skills") + "\n")
 
-	// Filter input
-	b.WriteString("Filter: " + m.textInput.View() + "\n")
+	// Filter input - show focused state
+	if m.inputMode == "filter" {
+		b.WriteString("Filter: " + m.textInput.View() + "\n")
+	} else {
+		// Show placeholder when not in filter mode
+		if m.textInput.Value() == "" {
+			b.WriteString("Filter: " + skillsHelpStyle.Render("press / to filter") + "\n")
+		} else {
+			b.WriteString("Filter: " + m.textInput.View() + "\n")
+		}
+	}
 
 	// Skill list
 	if len(m.filteredSkills) == 0 {
@@ -305,12 +428,13 @@ func (m *SkillsModel) viewSelect() string {
 				cursor = "> "
 			}
 
+			skillKey := fmt.Sprintf("%s|%s|%s", skill.Name, skill.Registry.Type, skill.Registry.Location)
 			checked := "[ ]"
-			if m.selectedSkills[skill.Name] {
+			if m.selectedSkills[skillKey] {
 				checked = "[x]"
 			}
 
-			line := fmt.Sprintf("%s%s %s (%s)", cursor, checked, skill.Name, skill.Registry)
+			line := fmt.Sprintf("%s%s %s %s", cursor, checked, skill.Name, formatRegistryDisplay(skill.Registry))
 
 			if i == m.cursor {
 				b.WriteString(skillsSelectedItemStyle.Render(line) + "\n")
@@ -323,8 +447,12 @@ func (m *SkillsModel) viewSelect() string {
 	// Stats
 	b.WriteString(fmt.Sprintf("\n%d/%d skills selected\n", len(m.selectedSkills), len(m.allSkills)))
 
-	// Help
-	b.WriteString("\n" + skillsHelpStyle.Render("↑/↓/j/k: navigate  space: toggle  enter: save  esc: cancel"))
+	// Help - different based on input mode
+	if m.inputMode == "filter" {
+		b.WriteString("\n" + skillsHelpStyle.Render("esc: exit filter  type to search"))
+	} else {
+		b.WriteString("\n" + skillsHelpStyle.Render("/: filter  ↑/↓/j/k: navigate  space: toggle  enter: save  esc: cancel"))
+	}
 
 	return b.String()
 }

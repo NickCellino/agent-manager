@@ -85,9 +85,6 @@ func SaveRegistries(store *models.RegistryStore) error {
 func AddRegistry(store *models.RegistryStore, registry models.Registry) error {
 	// Check for duplicates
 	for _, r := range store.Registries {
-		if r.Name == registry.Name {
-			return fmt.Errorf("registry with name '%s' already exists", registry.Name)
-		}
 		if r.Type == registry.Type && r.Location == registry.Location {
 			return fmt.Errorf("registry with location '%s' already exists", registry.Location)
 		}
@@ -98,12 +95,12 @@ func AddRegistry(store *models.RegistryStore, registry models.Registry) error {
 }
 
 // RemoveRegistry removes a registry from the store
-func RemoveRegistry(store *models.RegistryStore, name string) error {
+func RemoveRegistry(store *models.RegistryStore, registryType models.RegistryType, location string) error {
 	for i, r := range store.Registries {
-		if r.Name == name {
+		if r.Type == registryType && r.Location == location {
 			store.Registries = append(store.Registries[:i], store.Registries[i+1:]...)
 			return SaveRegistries(store)
 		}
 	}
-	return fmt.Errorf("registry '%s' not found", name)
+	return fmt.Errorf("registry '%s' (%s) not found", location, registryType)
 }

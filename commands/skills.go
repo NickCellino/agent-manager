@@ -5,7 +5,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"agent-manager/internal/skills"
+	"agent-manager/internal/storage"
 	"agent-manager/internal/tui"
 )
 
@@ -31,15 +31,23 @@ Unselected registry skills will prompt for deletion confirmation.`,
 			}
 
 			if saved {
-				// List installed skills
-				installed, err := skills.ListInstalledSkills()
+				// Load lock file to show only managed skills
+				lockFile, err := storage.LoadLockFile()
 				if err != nil {
 					return err
 				}
 
-				fmt.Printf("\nSkills installed in this project (%d total):\n", len(installed))
-				for _, skill := range installed {
-					fmt.Printf("  - %s\n", skill)
+				if len(lockFile.Skills) > 0 {
+					fmt.Printf("\nSkills managed by agent-manager (%d total):\n", len(lockFile.Skills))
+					for _, entry := range lockFile.Skills {
+						fmt.Printf("  - %s", entry.Name)
+						if entry.InstalledPath != entry.Name {
+							fmt.Printf(" (installed as '%s')", entry.InstalledPath)
+						}
+						fmt.Printf(" [%s: %s]\n", entry.Registry.Type, entry.Registry.Location)
+					}
+				} else {
+					fmt.Println("\nNo skills are currently managed by agent-manager.")
 				}
 			} else {
 				fmt.Println("\nNo changes made.")

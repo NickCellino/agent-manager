@@ -24,7 +24,7 @@ func DiscoverSkills() ([]models.Skill, error) {
 		skills, err := DiscoverSkillsInRegistry(registry)
 		if err != nil {
 			// Log error but continue with other registries
-			fmt.Fprintf(os.Stderr, "Warning: failed to discover skills in registry %s: %v\n", registry.Name, err)
+			fmt.Fprintf(os.Stderr, "Warning: failed to discover skills in registry %s: %v\n", registry.Location, err)
 			continue
 		}
 		allSkills = append(allSkills, skills...)
@@ -98,10 +98,9 @@ func listSkillsInDir(dir string, registry models.Registry) ([]models.Skill, erro
 	for _, entry := range entries {
 		if entry.IsDir() {
 			skills = append(skills, models.Skill{
-				Name:         entry.Name(),
-				Registry:     registry.Name,
-				RegistryType: registry.Type,
-				SourcePath:   filepath.Join(dir, entry.Name()),
+				Name:       entry.Name(),
+				Registry:   registry,
+				SourcePath: filepath.Join(dir, entry.Name()),
 			})
 		}
 	}
@@ -135,16 +134,20 @@ func CloneGitHubRegistry(location string) error {
 }
 
 // InstallSkill installs a skill to the target directory
-func InstallSkill(skill models.Skill, targetDir string) error {
-	targetPath := filepath.Join(targetDir, skill.Name)
+// The targetName parameter allows installing with a different name (e.g., for collision handling)
+func InstallSkill(skill models.Skill, targetDir string, targetName string) error {
+	if targetName == "" {
+		targetName = skill.Name
+	}
+
+	targetPath := filepath.Join(targetDir, targetName)
 
 	// Check if skill already exists (use Lstat to not follow symlinks)
 	if _, err := os.Lstat(targetPath); err == nil {
-		// Skill already exists, do nothing
-		return nil
+		return fmt.Errorf("skill already exists at %s", targetPath)
 	}
 
-	switch skill.RegistryType {
+	switch skill.Registry.Type {
 	case models.RegistryTypeGitHub:
 		// Copy the skill from the cloned repository
 		return copyDir(skill.SourcePath, targetPath)
@@ -152,7 +155,7 @@ func InstallSkill(skill models.Skill, targetDir string) error {
 		// Create symlink for local registries
 		return os.Symlink(skill.SourcePath, targetPath)
 	default:
-		return fmt.Errorf("unknown registry type: %s", skill.RegistryType)
+		return fmt.Errorf("unknown registry type: %s", skill.Registry.Type)
 	}
 }
 

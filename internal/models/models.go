@@ -10,20 +10,31 @@ const (
 
 // Registry represents a skill registry
 type Registry struct {
-	Name     string       `json:"name"`
 	Type     RegistryType `json:"type"`
 	Location string       `json:"location"` // For GitHub: "owner/repo", for local: absolute path
 }
 
 // Skill represents a skill that can be installed
 type Skill struct {
-	Name         string       `json:"name"`
-	Registry     string       `json:"registry"`
-	RegistryType RegistryType `json:"registry_type"`
-	SourcePath   string       `json:"source_path"` // Path within the registry
+	Name       string   `json:"name"`
+	Registry   Registry `json:"registry"`
+	SourcePath string   `json:"source_path"` // Path within the registry
 }
 
 // RegistryStore represents the persisted registry configuration
 type RegistryStore struct {
 	Registries []Registry `json:"registries"`
+}
+
+// LockFileEntry represents a single skill entry in the lock file
+type LockFileEntry struct {
+	Name          string   `json:"name"`
+	InstalledPath string   `json:"installedPath"`
+	Registry      Registry `json:"registry"`
+	Commit        string   `json:"commit,omitempty"` // Only for GitHub registries
+}
+
+// LockFile represents the agent-lock.json file structure
+type LockFile struct {
+	Skills []LockFileEntry `json:"skills"`
 }

@@ -19,7 +19,7 @@ import (
 type RegistryModel struct {
 	store             *models.RegistryStore
 	list              list.Model
-	mode              string // "list", "add-type", "add-name", "add-location", "confirm-delete"
+	mode              string // "list", "add-type", "add-location", "confirm-delete"
 	textInput         textinput.Model
 	newRegistry       models.Registry
 	selected          *models.Registry
@@ -44,10 +44,10 @@ type RegistryItem struct {
 	registry models.Registry
 }
 
-func (i RegistryItem) FilterValue() string { return i.registry.Name }
-func (i RegistryItem) Title() string       { return i.registry.Name }
+func (i RegistryItem) FilterValue() string { return i.registry.Location }
+func (i RegistryItem) Title() string       { return string(i.registry.Type) }
 func (i RegistryItem) Description() string {
-	return fmt.Sprintf("%s: %s", i.registry.Type, i.registry.Location)
+	return i.registry.Location
 }
 
 type registryDelegate struct{}
@@ -137,8 +137,6 @@ func (m *RegistryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateListMode(msg)
 		case "add-type":
 			return m.updateAddTypeMode(msg)
-		case "add-name":
-			return m.updateAddNameMode(msg)
 		case "add-location":
 			return m.updateAddLocationMode(msg)
 		case "confirm-delete":
@@ -190,8 +188,12 @@ func (m *RegistryModel) updateAddTypeMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEnter:
 		selectedType := registryTypes[m.registryTypeIndex]
 		m.newRegistry.Type = selectedType.typ
-		m.mode = "add-name"
-		m.textInput.Placeholder = "Registry name (e.g., my-registry)"
+		m.mode = "add-location"
+		if m.newRegistry.Type == models.RegistryTypeGitHub {
+			m.textInput.Placeholder = "GitHub location (e.g., owner/repo)"
+		} else {
+			m.textInput.Placeholder = "Local path (e.g., ~/Code/skills or /absolute/path)"
+		}
 		m.textInput.SetValue("")
 		return m, nil
 	case tea.KeyRunes:
@@ -210,32 +212,6 @@ func (m *RegistryModel) updateAddTypeMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
-}
-
-func (m *RegistryModel) updateAddNameMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEnter:
-		name := strings.TrimSpace(m.textInput.Value())
-		if name == "" {
-			return m, nil
-		}
-		m.newRegistry.Name = name
-		m.mode = "add-location"
-		if m.newRegistry.Type == models.RegistryTypeGitHub {
-			m.textInput.Placeholder = "GitHub location (e.g., owner/repo)"
-		} else {
-			m.textInput.Placeholder = "Local path (e.g., ~/Code/skills or /absolute/path)"
-		}
-		m.textInput.SetValue("")
-		return m, nil
-	case tea.KeyEsc:
-		m.mode = "list"
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.textInput, cmd = m.textInput.Update(msg)
-	return m, cmd
 }
 
 func (m *RegistryModel) updateAddLocationMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -277,7 +253,7 @@ func (m *RegistryModel) updateConfirmDeleteMode(msg tea.KeyMsg) (tea.Model, tea.
 	switch msg.String() {
 	case "y", "Y":
 		if m.selected != nil {
-			if err := storage.RemoveRegistry(m.store, m.selected.Name); err != nil {
+			if err := storage.RemoveRegistry(m.store, m.selected.Type, m.selected.Location); err != nil {
 				m.err = err
 				return m, tea.Quit
 			}
@@ -306,8 +282,6 @@ func (m *RegistryModel) View() string {
 		return m.viewList()
 	case "add-type":
 		return m.viewAddType()
-	case "add-name":
-		return m.viewAddName()
 	case "add-location":
 		return m.viewAddLocation()
 	case "confirm-delete":
@@ -349,13 +323,6 @@ func (m *RegistryModel) viewAddType() string {
 	return b.String()
 }
 
-func (m *RegistryModel) viewAddName() string {
-	return titleStyle.Render("Add Registry") + "\n\n" +
-		"Enter registry name:\n\n" +
-		m.textInput.View() + "\n\n" +
-		helpStyle.Render("enter: continue  esc: cancel")
-}
-
 func (m *RegistryModel) viewAddLocation() string {
 	return titleStyle.Render("Add Registry") + "\n\n" +
 		"Enter " + string(m.newRegistry.Type) + " location:\n\n" +
@@ -365,7 +332,7 @@ func (m *RegistryModel) viewAddLocation() string {
 
 func (m *RegistryModel) viewConfirmDelete() string {
 	return titleStyle.Render("Confirm Delete") + "\n\n" +
-		fmt.Sprintf("Are you sure you want to delete '%s'?\n\n", m.selected.Name) +
+		fmt.Sprintf("Are you sure you want to delete '%s' (%s)?\n\n", m.selected.Location, m.selected.Type) +
 		helpStyle.Render("y: yes  n: no")
 }
 
