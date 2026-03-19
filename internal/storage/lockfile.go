@@ -24,6 +24,7 @@ func LoadLockFile() (*models.LockFile, error) {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return &models.LockFile{
 			Skills: []models.LockFileEntry{},
+			Agents: []models.LockFileEntry{},
 		}, nil
 	}
 
@@ -35,6 +36,14 @@ func LoadLockFile() (*models.LockFile, error) {
 	var lockFile models.LockFile
 	if err := json.Unmarshal(data, &lockFile); err != nil {
 		return nil, fmt.Errorf("failed to parse lock file: %w", err)
+	}
+
+	// Ensure slices are non-nil for consistent behavior
+	if lockFile.Skills == nil {
+		lockFile.Skills = []models.LockFileEntry{}
+	}
+	if lockFile.Agents == nil {
+		lockFile.Agents = []models.LockFileEntry{}
 	}
 
 	return &lockFile, nil
@@ -167,4 +176,83 @@ func GetManagedSkillEntry(lockFile *models.LockFile, installedPath string) *mode
 		}
 	}
 	return nil
+}
+
+// AddAgentToLockFile adds an agent entry to the lock file.
+// If an entry with the same name and registry already exists it is updated.
+func AddAgentToLockFile(lockFile *models.LockFile, entry models.LockFileEntry) error {
+	for i, existing := range lockFile.Agents {
+		if existing.Name == entry.Name && existing.Registry.Type == entry.Registry.Type && existing.Registry.Location == entry.Registry.Location {
+			lockFile.Agents[i] = entry
+			return SaveLockFile(lockFile)
+		}
+	}
+	lockFile.Agents = append(lockFile.Agents, entry)
+	return SaveLockFile(lockFile)
+}
+
+// RemoveAgentFromLockFile removes an agent entry from the lock file.
+func RemoveAgentFromLockFile(lockFile *models.LockFile, name string, registry models.Registry) error {
+	for i, entry := range lockFile.Agents {
+		if entry.Name == name && entry.Registry.Type == registry.Type && entry.Registry.Location == registry.Location {
+			lockFile.Agents = append(lockFile.Agents[:i], lockFile.Agents[i+1:]...)
+			return SaveLockFile(lockFile)
+		}
+	}
+	return fmt.Errorf("agent '%s' from registry '%s' not found in lock file", name, registry.Location)
+}
+
+// FindAgentLockFileEntry finds an agent lock file entry by name and registry.
+func FindAgentLockFileEntry(lockFile *models.LockFile, name string, registry models.Registry) *models.LockFileEntry {
+	for i, entry := range lockFile.Agents {
+		if entry.Name == name && entry.Registry.Type == registry.Type && entry.Registry.Location == registry.Location {
+			return &lockFile.Agents[i]
+		}
+	}
+	return nil
+}
+
+// IsManagedAgent checks if an agent is managed by agent-manager (exists in lock file)
+func IsManagedAgent(lockFile *models.LockFile, agentName string) bool {
+	for _, entry := range lockFile.Agents {
+		if entry.InstalledPath == agentName {
+			return true
+		}
+	}
+	return false
+}
+
+// GetManagedAgentEntry gets the lock file entry for an installed agent by its path name
+func GetManagedAgentEntry(lockFile *models.LockFile, installedPath string) *models.LockFileEntry {
+	for i, entry := range lockFile.Agents {
+		if entry.InstalledPath == installedPath {
+			return &lockFile.Agents[i]
+		}
+	}
+	return nil
+}
+
+// GenerateInstalledAgentPath generates a unique installed path for an agent.
+// Similar to GenerateInstalledPath but checks for .md files on the filesystem.
+func GenerateInstalledAgentPath(agentName string, registry models.Registry, lockFile *models.LockFile, agentsDir string) string {
+	// Check if this exact agent (same name + registry) is already in the lock file
+	for _, entry := range lockFile.Agents {
+		if entry.Name == agentName {
+			if entry.Registry.Type == registry.Type && entry.Registry.Location == registry.Location {
+				return entry.InstalledPath
+			}
+			// Same agent name but different registry - need to differentiate
+			sanitized := SanitizeRegistryLocation(registry.Location)
+			return fmt.Sprintf("%s-%s", agentName, sanitized)
+		}
+	}
+
+	// Check if a file already exists at the target path (manually installed or unmanaged)
+	fullPath := fmt.Sprintf("%s/%s.md", agentsDir, agentName)
+	if _, err := os.Stat(fullPath); err == nil {
+		sanitized := SanitizeRegistryLocation(registry.Location)
+		return fmt.Sprintf("%s-%s", agentName, sanitized)
+	}
+
+	return agentName
 }

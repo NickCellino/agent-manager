@@ -21,6 +21,13 @@ type Skill struct {
 	SourcePath string   `json:"source_path"` // Path within the registry
 }
 
+// Agent represents an agent that can be installed
+type Agent struct {
+	Name       string   `json:"name"`
+	Registry   Registry `json:"registry"`
+	SourcePath string   `json:"source_path"` // Path to the .md file within the registry
+}
+
 // RegistryStore represents the persisted registry configuration
 type RegistryStore struct {
 	Registries []Registry `json:"registries"`
@@ -37,4 +44,5 @@ type LockFileEntry struct {
 // LockFile represents the agent-lock.json file structure
 type LockFile struct {
 	Skills []LockFileEntry `json:"skills"`
+	Agents []LockFileEntry `json:"agents"`
 }

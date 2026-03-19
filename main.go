@@ -15,6 +15,7 @@ func main() {
 		Version: "0.1.0",
 		Commands: []*cli.Command{
 			commands.SkillsCommand(),
+			commands.AgentsCommand(),
 			commands.RegistryCommand(),
 		},
 	}
