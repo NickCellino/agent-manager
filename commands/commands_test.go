@@ -13,6 +13,11 @@ import (
 // binaryPath holds the path to the compiled agent-manager binary used in all tests.
 var binaryPath string
 
+// gitNoPrompt disables interactive git credential prompts in all test child
+// processes, so that clone attempts against private/unreachable repos fail
+// fast (exit 128) instead of blocking the test run indefinitely.
+const gitNoPrompt = "GIT_TERMINAL_PROMPT=0"
+
 // TestMain builds the binary once before running all tests and removes it afterward.
 func TestMain(m *testing.M) {
 	tmpDir, err := os.MkdirTemp("", "agent-manager-e2e-*")
@@ -66,7 +71,7 @@ func newTestEnv(t *testing.T) *testEnv {
 func (e *testEnv) run(args ...string) (stdout, stderr string, code int) {
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = e.projectDir
-	cmd.Env = append(os.Environ(), "XDG_DATA_HOME="+e.xdgDataHome)
+	cmd.Env = append(os.Environ(), "XDG_DATA_HOME="+e.xdgDataHome, gitNoPrompt)
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -420,6 +425,148 @@ func TestSkillsAdd_MultipleRegistries_WithFlag(t *testing.T) {
 		t.Errorf("expected 'Installed skill' in output, got:\n%s", out)
 	}
 }
+
+// ---- GitHub Registry tests ----
+
+// addGitHubRegistryOrSkip adds the NickCellino/laptop-setup GitHub registry to env,
+// then runs `skills list` to trigger a clone of the repo.  If the "playground" skill
+// does not appear in the output (e.g. the repo is private or network is unavailable),
+// the test is skipped gracefully.  On success it returns the `skills list` stdout so
+// the caller can make additional assertions without running the command a second time.
+func addGitHubRegistryOrSkip(t *testing.T, env *testEnv) string {
+	t.Helper()
+	env.run("registry", "add", "github", "NickCellino/laptop-setup")
+	out, errOut, _ := env.run("skills", "list")
+	if !strings.Contains(out, "playground") {
+		t.Skipf("NickCellino/laptop-setup not accessible or 'playground' skill not found; skipping GitHub registry test.\nstdout: %s\nstderr: %s", out, errOut)
+	}
+	return out
+}
+
+func TestRegistryAdd_GitHub(t *testing.T) {
+	env := newTestEnv(t)
+
+	out, _, code := env.run("registry", "add", "github", "NickCellino/laptop-setup")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "Added github registry") {
+		t.Errorf("expected 'Added github registry' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "NickCellino/laptop-setup") {
+		t.Errorf("expected 'NickCellino/laptop-setup' in output, got:\n%s", out)
+	}
+
+	// Verify it appears in the list (no network needed — registry config is local)
+	listOut, _, _ := env.run("registry", "list")
+	if !strings.Contains(listOut, "[github]") {
+		t.Errorf("expected '[github]' in registry list output, got:\n%s", listOut)
+	}
+	if !strings.Contains(listOut, "NickCellino/laptop-setup") {
+		t.Errorf("expected 'NickCellino/laptop-setup' in registry list output, got:\n%s", listOut)
+	}
+}
+
+func TestSkillsList_GitHub(t *testing.T) {
+	env := newTestEnv(t)
+	out := addGitHubRegistryOrSkip(t, env)
+
+	// addGitHubRegistryOrSkip already verified "playground" is present; also check
+	// that the registry type and location are shown for that skill.
+	if !strings.Contains(out, "[github: NickCellino/laptop-setup]") {
+		t.Errorf("expected '[github: NickCellino/laptop-setup]' in skills list output, got:\n%s", out)
+	}
+}
+
+func TestSkillsAdd_GitHub(t *testing.T) {
+	env := newTestEnv(t)
+	addGitHubRegistryOrSkip(t, env)
+
+	out, _, code := env.run("skills", "add", "playground")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, `Installed skill "playground"`) {
+		t.Errorf("expected 'Installed skill \"playground\"' in output, got:\n%s", out)
+	}
+
+	// GitHub registries copy the skill directory (not a symlink)
+	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "playground")
+	info, err := os.Lstat(installedPath)
+	if err != nil {
+		t.Fatalf("expected playground skill to exist at %s: %v", installedPath, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Errorf("expected a regular directory (not symlink) for a GitHub registry skill at %s", installedPath)
+	}
+}
+
+func TestSkillsRemove_GitHub(t *testing.T) {
+	env := newTestEnv(t)
+	addGitHubRegistryOrSkip(t, env)
+
+	env.run("skills", "add", "playground")
+
+	out, _, code := env.run("skills", "remove", "playground")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, `Removed skill "playground"`) {
+		t.Errorf("expected 'Removed skill \"playground\"' in output, got:\n%s", out)
+	}
+
+	// Verify the skill directory was removed from the filesystem
+	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "playground")
+	if _, err := os.Lstat(installedPath); !os.IsNotExist(err) {
+		t.Errorf("expected playground skill to be absent at %s after removal", installedPath)
+	}
+
+	// Verify it's no longer in the installed list
+	installedOut, _, _ := env.run("skills", "installed")
+	if strings.Contains(installedOut, "playground") {
+		t.Errorf("expected 'playground' to be absent from installed list after removal, got:\n%s", installedOut)
+	}
+}
+
+func TestFullGitHubRegistryWorkflow(t *testing.T) {
+	env := newTestEnv(t)
+	addGitHubRegistryOrSkip(t, env)
+
+	// Install the playground skill
+	env.run("skills", "add", "playground")
+
+	// Verify it appears in the installed list
+	installedOut, _, code := env.run("skills", "installed")
+	if code != 0 {
+		t.Fatalf("skills installed: expected exit 0, got %d", code)
+	}
+	if !strings.Contains(installedOut, "playground") {
+		t.Errorf("expected 'playground' in installed list, got:\n%s", installedOut)
+	}
+	if !strings.Contains(installedOut, "[github: NickCellino/laptop-setup]") {
+		t.Errorf("expected registry info in installed list, got:\n%s", installedOut)
+	}
+
+	// Installing again should be idempotent
+	idempotentOut, _, idempotentCode := env.run("skills", "add", "playground")
+	if idempotentCode != 0 {
+		t.Fatalf("expected exit 0 on duplicate install, got %d", idempotentCode)
+	}
+	if !strings.Contains(idempotentOut, "already installed") {
+		t.Errorf("expected 'already installed' on duplicate install, got:\n%s", idempotentOut)
+	}
+
+	// Remove the skill
+	env.run("skills", "remove", "playground")
+
+	// Nothing should be installed
+	afterRemove, _, _ := env.run("skills", "installed")
+	if !strings.Contains(afterRemove, "No skills managed") {
+		t.Errorf("expected 'No skills managed' after removal, got:\n%s", afterRemove)
+	}
+}
+
+// ---- Full local workflow ----
 
 func TestFullRegistryAndSkillsWorkflow(t *testing.T) {
 	env := newTestEnv(t)
