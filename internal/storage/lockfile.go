@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -128,7 +129,7 @@ func GenerateInstalledPath(skillName string, registry models.Registry, lockFile 
 
 	// Check if something already exists at the target path (manually installed or unmanaged)
 	targetPath := skillName
-	fullPath := fmt.Sprintf("%s/%s", skillsDir, targetPath)
+	fullPath := filepath.Join(skillsDir, targetPath)
 	if _, err := os.Stat(fullPath); err == nil {
 		// Path already exists - append registry location to differentiate
 		sanitized := SanitizeRegistryLocation(registry.Location)

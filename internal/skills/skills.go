@@ -39,7 +39,7 @@ func DiscoverSkillsInRegistry(registry models.Registry) ([]models.Skill, error) 
 
 	switch registry.Type {
 	case models.RegistryTypeGitHub:
-		registryPath = getGitHubRegistryPath(registry.Location)
+		registryPath = GetGitHubRegistryPath(registry.Location)
 		// Ensure the registry is cloned
 		if _, err := os.Stat(registryPath); os.IsNotExist(err) {
 			if err := CloneGitHubRegistry(registry.Location); err != nil {
@@ -108,15 +108,15 @@ func listSkillsInDir(dir string, registry models.Registry) ([]models.Skill, erro
 	return skills, nil
 }
 
-// getGitHubRegistryPath returns the local path for a GitHub registry
-func getGitHubRegistryPath(location string) string {
+// GetGitHubRegistryPath returns the local path for a GitHub registry
+func GetGitHubRegistryPath(location string) string {
 	return filepath.Join(storage.GitHubRegistriesDir(), location)
 }
 
 // CloneGitHubRegistry clones a GitHub repository to the local cache
 func CloneGitHubRegistry(location string) error {
 	repoURL := fmt.Sprintf("https://github.com/%s.git", location)
-	targetPath := getGitHubRegistryPath(location)
+	targetPath := GetGitHubRegistryPath(location)
 
 	// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
@@ -239,11 +239,6 @@ func copyFile(src, dst string) error {
 
 // GetProjectSkillsDir returns the path to the project's skills directory
 func GetProjectSkillsDir() string {
-	// First check for .opencode/skills
-	if _, err := os.Stat(".opencode"); err == nil {
-		return ".opencode/skills"
-	}
-	// Default to .opencode/skills (will be created if needed)
 	return ".opencode/skills"
 }
 

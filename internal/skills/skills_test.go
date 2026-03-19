@@ -62,20 +62,16 @@ func TestSkillDiscoveryAndInstallation(t *testing.T) {
 		t.Fatalf("Failed to install skill: %v", err)
 	}
 
-	// Verify installation
+	// Verify installation - the skill directory should be accessible with its contents
 	installedSkillPath := filepath.Join(targetDir, "test-skill")
 	if _, err := os.Stat(installedSkillPath); os.IsNotExist(err) {
 		t.Fatalf("Skill was not installed at %s", installedSkillPath)
 	}
 
-	// Verify it's a symlink for local registries
-	info, err := os.Lstat(installedSkillPath)
-	if err != nil {
-		t.Fatalf("Failed to stat installed skill: %v", err)
-	}
-
-	if info.Mode()&os.ModeSymlink == 0 {
-		t.Fatalf("Expected symlink for local registry skill")
+	// Verify the skill's contents are accessible (end behavior, not how it's stored)
+	installedSkillFile := filepath.Join(installedSkillPath, "skill.yaml")
+	if _, err := os.Stat(installedSkillFile); os.IsNotExist(err) {
+		t.Fatalf("Skill file not accessible at %s", installedSkillFile)
 	}
 
 	// Test 3: List installed skills

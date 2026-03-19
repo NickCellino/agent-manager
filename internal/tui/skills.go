@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -298,7 +297,9 @@ func (m *SkillsModel) applyFilter() {
 		return
 	}
 
-	// Use fuzzy matching
+	// Build a list of names indexed the same way as m.allSkills for fuzzy matching.
+	// Using match.Index lets us correctly retrieve duplicate-named skills from
+	// different registries without the first-match-wins break.
 	var names []string
 	for _, skill := range m.allSkills {
 		names = append(names, skill.Name)
@@ -307,12 +308,7 @@ func (m *SkillsModel) applyFilter() {
 	matches := fuzzy.Find(m.filter, names)
 	m.filteredSkills = nil
 	for _, match := range matches {
-		for _, skill := range m.allSkills {
-			if skill.Name == match.Str {
-				m.filteredSkills = append(m.filteredSkills, skill)
-				break
-			}
-		}
+		m.filteredSkills = append(m.filteredSkills, m.allSkills[match.Index])
 	}
 	m.cursor = 0
 }
@@ -346,7 +342,7 @@ func (m *SkillsModel) saveSelections() error {
 			// Get commit hash for GitHub registries
 			var commit string
 			if skill.Registry.Type == models.RegistryTypeGitHub {
-				registryPath := getGitHubRegistryPath(skill.Registry.Location)
+				registryPath := skills.GetGitHubRegistryPath(skill.Registry.Location)
 				commit, _ = storage.GetGitCommit(registryPath)
 			}
 
@@ -382,11 +378,6 @@ func (m *SkillsModel) saveSelections() error {
 	}
 
 	return nil
-}
-
-// getGitHubRegistryPath returns the local path for a GitHub registry
-func getGitHubRegistryPath(location string) string {
-	return filepath.Join(storage.GitHubRegistriesDir(), location)
 }
 
 func (m *SkillsModel) View() string {
