@@ -108,6 +108,26 @@ agent-manager skills remove my-skill
 
 ---
 
+## Discovery
+
+When scanning a registry for available skills and agents, agent-manager uses different discovery mechanisms:
+
+### Skills
+
+Skills are discovered as subdirectories within:
+- `.agents/skills/`
+- `.opencode/skills/`
+
+Each subdirectory is treated as an individual skill.
+
+### Agents
+
+Agents are discovered as **`.md` files** in any directory named exactly **`agents/`** (searched recursively throughout the registry). The filename (without the `.md` extension) becomes the agent name. For example:
+- `.opencode/agents/my-agent.md` → agent named "my-agent"
+- `deeply/nested/agents/another-agent.md` → agent named "another-agent"
+
+Note: Files in subdirectories of `agents/` are not recognized (e.g., `agents/subdir/file.md` is ignored).
+
 ## How Skills Are Stored
 
 - **GitHub registries** are cloned to `~/.local/share/agent-manager/github-registries/<owner>/<repo>` on first use
