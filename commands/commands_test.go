@@ -428,17 +428,20 @@ func TestSkillsAdd_MultipleRegistries_WithFlag(t *testing.T) {
 
 // ---- GitHub Registry tests ----
 
-// addGitHubRegistryOrSkip adds the darrenhinde/OpenAgentsControl GitHub registry to env,
-// then runs `skills list` to trigger a clone of the repo.  If the "context-manager" skill
-// does not appear in the output (e.g. the repo is private or network is unavailable),
-// the test is skipped gracefully.  On success it returns the `skills list` stdout so
+// addGitHubRegistry adds the NickCellino/opencode-e2e-test-registry GitHub registry to env,
+// then runs `skills list` to trigger a clone of the repo.  If the expected skills
+// do not appear in the output (e.g. the repo is private or network is unavailable),
+// the test fails. On success it returns the `skills list` stdout so
 // the caller can make additional assertions without running the command a second time.
-func addGitHubRegistryOrSkip(t *testing.T, env *testEnv) string {
+func addGitHubRegistry(t *testing.T, env *testEnv) string {
 	t.Helper()
-	env.run("registry", "add", "github", "darrenhinde/OpenAgentsControl")
+	env.run("registry", "add", "github", "NickCellino/opencode-e2e-test-registry")
 	out, errOut, _ := env.run("skills", "list")
-	if !strings.Contains(out, "context-manager") {
-		t.Skipf("darrenhinde/OpenAgentsControl not accessible or 'context-manager' skill not found; skipping GitHub registry test.\nstdout: %s\nstderr: %s", out, errOut)
+	if !strings.Contains(out, "e2e-test-skill") {
+		t.Fatalf("expected 'e2e-test-skill' in skills list output; NickCellino/opencode-e2e-test-registry may not be accessible.\nstdout: %s\nstderr: %s", out, errOut)
+	}
+	if !strings.Contains(out, "sample-validation-skill") {
+		t.Fatalf("expected 'sample-validation-skill' in skills list output; NickCellino/opencode-e2e-test-registry may not be accessible.\nstdout: %s\nstderr: %s", out, errOut)
 	}
 	return out
 }
@@ -446,15 +449,15 @@ func addGitHubRegistryOrSkip(t *testing.T, env *testEnv) string {
 func TestRegistryAdd_GitHub(t *testing.T) {
 	env := newTestEnv(t)
 
-	out, _, code := env.run("registry", "add", "github", "darrenhinde/OpenAgentsControl")
+	out, _, code := env.run("registry", "add", "github", "NickCellino/opencode-e2e-test-registry")
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
 	if !strings.Contains(out, "Added github registry") {
 		t.Errorf("expected 'Added github registry' in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "darrenhinde/OpenAgentsControl") {
-		t.Errorf("expected 'darrenhinde/OpenAgentsControl' in output, got:\n%s", out)
+	if !strings.Contains(out, "NickCellino/opencode-e2e-test-registry") {
+		t.Errorf("expected 'NickCellino/opencode-e2e-test-registry' in output, got:\n%s", out)
 	}
 
 	// Verify it appears in the list (no network needed — registry config is local)
@@ -462,39 +465,49 @@ func TestRegistryAdd_GitHub(t *testing.T) {
 	if !strings.Contains(listOut, "[github]") {
 		t.Errorf("expected '[github]' in registry list output, got:\n%s", listOut)
 	}
-	if !strings.Contains(listOut, "darrenhinde/OpenAgentsControl") {
-		t.Errorf("expected 'darrenhinde/OpenAgentsControl' in registry list output, got:\n%s", listOut)
+	if !strings.Contains(listOut, "NickCellino/opencode-e2e-test-registry") {
+		t.Errorf("expected 'NickCellino/opencode-e2e-test-registry' in registry list output, got:\n%s", listOut)
 	}
 }
 
 func TestSkillsList_GitHub(t *testing.T) {
 	env := newTestEnv(t)
-	out := addGitHubRegistryOrSkip(t, env)
+	out := addGitHubRegistry(t, env)
 
-	// addGitHubRegistryOrSkip already verified "context-manager" is present; also check
-	// that the registry type and location are shown for that skill.
-	if !strings.Contains(out, "[github: darrenhinde/OpenAgentsControl]") {
-		t.Errorf("expected '[github: darrenhinde/OpenAgentsControl]' in skills list output, got:\n%s", out)
+	// Verify both expected skills are present with exact names
+	if !strings.Contains(out, "e2e-test-skill") {
+		t.Errorf("expected 'e2e-test-skill' in skills list output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "sample-validation-skill") {
+		t.Errorf("expected 'sample-validation-skill' in skills list output, got:\n%s", out)
+	}
+	// Verify registry info is shown for skills
+	if !strings.Contains(out, "[github: NickCellino/opencode-e2e-test-registry]") {
+		t.Errorf("expected '[github: NickCellino/opencode-e2e-test-registry]' in skills list output, got:\n%s", out)
+	}
+	// Verify total count
+	if !strings.Contains(out, "2 total") {
+		t.Errorf("expected '2 total' in skills list output, got:\n%s", out)
 	}
 }
 
 func TestSkillsAdd_GitHub(t *testing.T) {
 	env := newTestEnv(t)
-	addGitHubRegistryOrSkip(t, env)
+	addGitHubRegistry(t, env)
 
-	out, _, code := env.run("skills", "add", "context-manager")
+	out, _, code := env.run("skills", "add", "e2e-test-skill")
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
 	}
-	if !strings.Contains(out, `Installed skill "context-manager"`) {
-		t.Errorf("expected 'Installed skill \"context-manager\"' in output, got:\n%s", out)
+	if !strings.Contains(out, `Installed skill "e2e-test-skill"`) {
+		t.Errorf("expected 'Installed skill \"e2e-test-skill\"' in output, got:\n%s", out)
 	}
 
 	// GitHub registries copy the skill directory (not a symlink)
-	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "context-manager")
+	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "e2e-test-skill")
 	info, err := os.Lstat(installedPath)
 	if err != nil {
-		t.Fatalf("expected context-manager skill to exist at %s: %v", installedPath, err)
+		t.Fatalf("expected e2e-test-skill skill to exist at %s: %v", installedPath, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		t.Errorf("expected a regular directory (not symlink) for a GitHub registry skill at %s", installedPath)
@@ -503,52 +516,52 @@ func TestSkillsAdd_GitHub(t *testing.T) {
 
 func TestSkillsRemove_GitHub(t *testing.T) {
 	env := newTestEnv(t)
-	addGitHubRegistryOrSkip(t, env)
+	addGitHubRegistry(t, env)
 
-	env.run("skills", "add", "context-manager")
+	env.run("skills", "add", "e2e-test-skill")
 
-	out, _, code := env.run("skills", "remove", "context-manager")
+	out, _, code := env.run("skills", "remove", "e2e-test-skill")
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
 	}
-	if !strings.Contains(out, `Removed skill "context-manager"`) {
-		t.Errorf("expected 'Removed skill \"context-manager\"' in output, got:\n%s", out)
+	if !strings.Contains(out, `Removed skill "e2e-test-skill"`) {
+		t.Errorf("expected 'Removed skill \"e2e-test-skill\"' in output, got:\n%s", out)
 	}
 
 	// Verify the skill directory was removed from the filesystem
-	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "context-manager")
+	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", "e2e-test-skill")
 	if _, err := os.Lstat(installedPath); !os.IsNotExist(err) {
-		t.Errorf("expected context-manager skill to be absent at %s after removal", installedPath)
+		t.Errorf("expected e2e-test-skill skill to be absent at %s after removal", installedPath)
 	}
 
 	// Verify it's no longer in the installed list
 	installedOut, _, _ := env.run("skills", "installed")
-	if strings.Contains(installedOut, "context-manager") {
-		t.Errorf("expected 'context-manager' to be absent from installed list after removal, got:\n%s", installedOut)
+	if strings.Contains(installedOut, "e2e-test-skill") {
+		t.Errorf("expected 'e2e-test-skill' to be absent from installed list after removal, got:\n%s", installedOut)
 	}
 }
 
 func TestFullGitHubRegistryWorkflow(t *testing.T) {
 	env := newTestEnv(t)
-	addGitHubRegistryOrSkip(t, env)
+	addGitHubRegistry(t, env)
 
-	// Install the context-manager skill
-	env.run("skills", "add", "context-manager")
+	// Install the e2e-test-skill
+	env.run("skills", "add", "e2e-test-skill")
 
 	// Verify it appears in the installed list
 	installedOut, _, code := env.run("skills", "installed")
 	if code != 0 {
 		t.Fatalf("skills installed: expected exit 0, got %d", code)
 	}
-	if !strings.Contains(installedOut, "context-manager") {
-		t.Errorf("expected 'context-manager' in installed list, got:\n%s", installedOut)
+	if !strings.Contains(installedOut, "e2e-test-skill") {
+		t.Errorf("expected 'e2e-test-skill' in installed list, got:\n%s", installedOut)
 	}
-	if !strings.Contains(installedOut, "[github: darrenhinde/OpenAgentsControl]") {
+	if !strings.Contains(installedOut, "[github: NickCellino/opencode-e2e-test-registry]") {
 		t.Errorf("expected registry info in installed list, got:\n%s", installedOut)
 	}
 
 	// Installing again should be idempotent
-	idempotentOut, _, idempotentCode := env.run("skills", "add", "context-manager")
+	idempotentOut, _, idempotentCode := env.run("skills", "add", "e2e-test-skill")
 	if idempotentCode != 0 {
 		t.Fatalf("expected exit 0 on duplicate install, got %d", idempotentCode)
 	}
@@ -557,7 +570,7 @@ func TestFullGitHubRegistryWorkflow(t *testing.T) {
 	}
 
 	// Remove the skill
-	env.run("skills", "remove", "context-manager")
+	env.run("skills", "remove", "e2e-test-skill")
 
 	// Nothing should be installed
 	afterRemove, _, _ := env.run("skills", "installed")
@@ -624,36 +637,23 @@ func makeLocalRegistryWithAgents(t *testing.T, agentNames ...string) string {
 	return dir
 }
 
-// addGitHubRegistryForAgentsOrSkip adds the darrenhinde/OpenAgentsControl GitHub registry to env,
-// then runs `agents list` to trigger a clone of the repo. If no agent appears in the output
-// (e.g. network is unavailable or the repo has no agents), the test is skipped gracefully.
-// On success it returns the `agents list` stdout.
-func addGitHubRegistryForAgentsOrSkip(t *testing.T, env *testEnv) (string, string) {
+// addGitHubRegistryForAgents adds the NickCellino/opencode-e2e-test-registry GitHub registry to env,
+// then runs `agents list` to trigger a clone of the repo. If the expected agents are not found,
+// the test fails. On success it returns the `agents list` stdout.
+func addGitHubRegistryForAgents(t *testing.T, env *testEnv) string {
 	t.Helper()
-	env.run("registry", "add", "github", "darrenhinde/OpenAgentsControl")
+	env.run("registry", "add", "github", "NickCellino/opencode-e2e-test-registry")
 	out, errOut, _ := env.run("agents", "list")
-	// The repo may not have any agents; if so, skip.
-	if strings.Contains(out, "No agents found") || !strings.Contains(out, "[github:") {
-		t.Skipf("darrenhinde/OpenAgentsControl has no agents or is not accessible; skipping GitHub agents test.\nstdout: %s\nstderr: %s", out, errOut)
+	if errOut != "" {
+		t.Fatalf("expected empty error output, got %v", errOut)
 	}
-	// Extract any agent name from the output (first word of first agent line)
-	var agentName string
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		// Agent lines look like: "agent-name [github: darrenhinde/OpenAgentsControl]"
-		if !strings.Contains(line, "[github:") {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) > 0 && !strings.HasPrefix(parts[0], "[") {
-			agentName = parts[0]
-			break
-		}
+	if !strings.Contains(out, "e2e-test-agent") {
+		t.Fatalf("expected 'e2e-test-agent' in agents list output; NickCellino/opencode-e2e-test-registry may not be accessible.\nstdout: %s\nstderr: %s", out, errOut)
 	}
-	if agentName == "" {
-		t.Skipf("Could not parse agent name from agents list output:\n%s", out)
+	if !strings.Contains(out, "sample-helper-agent") {
+		t.Fatalf("expected 'sample-helper-agent' in agents list output; NickCellino/opencode-e2e-test-registry may not be accessible.\nstdout: %s\nstderr: %s", out, errOut)
 	}
-	return out, agentName
+	return out
 }
 
 // ---- Agents tests ----
@@ -861,18 +861,18 @@ func TestAgentsAdd_MultipleRegistries_WithFlag(t *testing.T) {
 
 func TestAgentsAdd_GitHub(t *testing.T) {
 	env := newTestEnv(t)
-	_, agentName := addGitHubRegistryForAgentsOrSkip(t, env)
+	addGitHubRegistryForAgents(t, env)
 
-	out, _, code := env.run("agents", "add", agentName)
+	out, _, code := env.run("agents", "add", "e2e-test-agent")
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
 	}
-	if !strings.Contains(out, fmt.Sprintf(`Installed agent "%s"`, agentName)) {
-		t.Errorf("expected 'Installed agent %q' in output, got:\n%s", agentName, out)
+	if !strings.Contains(out, `Installed agent "e2e-test-agent"`) {
+		t.Errorf("expected 'Installed agent \"e2e-test-agent\"' in output, got:\n%s", out)
 	}
 
 	// GitHub registries copy the agent file (not a symlink)
-	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", agentName+".md")
+	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", "e2e-test-agent.md")
 	info, err := os.Lstat(installedPath)
 	if err != nil {
 		t.Fatalf("expected agent file to exist at %s: %v", installedPath, err)
@@ -884,19 +884,19 @@ func TestAgentsAdd_GitHub(t *testing.T) {
 
 func TestAgentsRemove_GitHub(t *testing.T) {
 	env := newTestEnv(t)
-	_, agentName := addGitHubRegistryForAgentsOrSkip(t, env)
+	addGitHubRegistryForAgents(t, env)
 
-	env.run("agents", "add", agentName)
+	env.run("agents", "add", "e2e-test-agent")
 
-	out, _, code := env.run("agents", "remove", agentName)
+	out, _, code := env.run("agents", "remove", "e2e-test-agent")
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
 	}
-	if !strings.Contains(out, fmt.Sprintf(`Removed agent "%s"`, agentName)) {
-		t.Errorf("expected 'Removed agent %q' in output, got:\n%s", agentName, out)
+	if !strings.Contains(out, `Removed agent "e2e-test-agent"`) {
+		t.Errorf("expected 'Removed agent \"e2e-test-agent\"' in output, got:\n%s", out)
 	}
 
-	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", agentName+".md")
+	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", "e2e-test-agent.md")
 	if _, err := os.Lstat(installedPath); !os.IsNotExist(err) {
 		t.Errorf("expected agent file to be absent at %s after removal", installedPath)
 	}
