@@ -936,3 +936,357 @@ func TestFullRegistryAndAgentsWorkflow(t *testing.T) {
 		t.Errorf("expected 'No agents managed' after removal, got:\n%s", afterRemove)
 	}
 }
+
+// ---- Update helpers ----
+
+// mustExec runs a command and fatals the test on failure.
+func mustExec(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command(args[0], args[1:]...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("command %v failed: %v\nOutput: %s", args, err, out)
+	}
+}
+
+// makeGitUpstreamWithSkill initialises a git repo with an initial skill commit,
+// clones it to the expected github-registries path inside env, and returns the
+// upstream repo path (so tests can push further commits).
+func makeGitUpstreamWithSkill(t *testing.T, env *testEnv, owner, repo, skillName, content string) string {
+	t.Helper()
+
+	upstreamDir := t.TempDir()
+	mustExec(t, upstreamDir, "git", "init")
+	mustExec(t, upstreamDir, "git", "config", "user.email", "test@test.com")
+	mustExec(t, upstreamDir, "git", "config", "user.name", "Test")
+
+	skillDir := filepath.Join(upstreamDir, ".opencode", "skills", skillName)
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("makeGitUpstreamWithSkill: failed to create skill dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte(content), 0644); err != nil {
+		t.Fatalf("makeGitUpstreamWithSkill: failed to write skill file: %v", err)
+	}
+
+	mustExec(t, upstreamDir, "git", "add", ".")
+	mustExec(t, upstreamDir, "git", "commit", "-m", "initial")
+
+	// Clone to the github-registries path that agent-manager expects
+	cloneDir := filepath.Join(env.xdgDataHome, "agent-manager", "github-registries", owner, repo)
+	if err := os.MkdirAll(filepath.Dir(cloneDir), 0755); err != nil {
+		t.Fatalf("makeGitUpstreamWithSkill: failed to create parent dir: %v", err)
+	}
+	mustExec(t, "", "git", "clone", upstreamDir, cloneDir)
+
+	return upstreamDir
+}
+
+// makeGitUpstreamWithAgent initialises a git repo with an initial agent commit,
+// clones it to the expected github-registries path inside env, and returns the
+// upstream repo path (so tests can push further commits).
+func makeGitUpstreamWithAgent(t *testing.T, env *testEnv, owner, repo, agentName, content string) string {
+	t.Helper()
+
+	upstreamDir := t.TempDir()
+	mustExec(t, upstreamDir, "git", "init")
+	mustExec(t, upstreamDir, "git", "config", "user.email", "test@test.com")
+	mustExec(t, upstreamDir, "git", "config", "user.name", "Test")
+
+	agentsDir := filepath.Join(upstreamDir, ".opencode", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("makeGitUpstreamWithAgent: failed to create agents dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, agentName+".md"), []byte(content), 0644); err != nil {
+		t.Fatalf("makeGitUpstreamWithAgent: failed to write agent file: %v", err)
+	}
+
+	mustExec(t, upstreamDir, "git", "add", ".")
+	mustExec(t, upstreamDir, "git", "commit", "-m", "initial")
+
+	cloneDir := filepath.Join(env.xdgDataHome, "agent-manager", "github-registries", owner, repo)
+	if err := os.MkdirAll(filepath.Dir(cloneDir), 0755); err != nil {
+		t.Fatalf("makeGitUpstreamWithAgent: failed to create parent dir: %v", err)
+	}
+	mustExec(t, "", "git", "clone", upstreamDir, cloneDir)
+
+	return upstreamDir
+}
+
+// ---- Skills update tests ----
+
+func TestSkillsUpdate_NoManagedSkills(t *testing.T) {
+	env := newTestEnv(t)
+	out, _, code := env.run("skills", "update")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "No skills managed") {
+		t.Errorf("expected 'No skills managed' in output, got:\n%s", out)
+	}
+}
+
+func TestSkillsUpdate_NoGitHubSkills(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistry(t, "my-skill")
+	env.run("registry", "add", "local", regDir)
+	env.run("skills", "add", "my-skill")
+
+	out, _, code := env.run("skills", "update")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "No skills from GitHub registries") {
+		t.Errorf("expected 'No skills from GitHub registries' in output, got:\n%s", out)
+	}
+}
+
+func TestSkillsUpdate_NotManaged(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("skills", "update", "nonexistent")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when skill not managed")
+	}
+	if !strings.Contains(errOut, "not managed") {
+		t.Errorf("expected 'not managed' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestSkillsUpdate_SkipsLocalRegistry(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistry(t, "my-skill")
+	env.run("registry", "add", "local", regDir)
+	env.run("skills", "add", "my-skill")
+
+	out, _, code := env.run("skills", "update", "my-skill")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "Skipping") {
+		t.Errorf("expected 'Skipping' in output for non-GitHub skill, got:\n%s", out)
+	}
+}
+
+func TestSkillsUpdate_GitHub_SpecificSkill(t *testing.T) {
+	env := newTestEnv(t)
+	owner, repo, skillName := "test-owner", "test-repo", "my-skill"
+
+	upstreamDir := makeGitUpstreamWithSkill(t, env, owner, repo, skillName, "version: 1\n")
+
+	// Register as a github registry and install the skill
+	env.run("registry", "add", "github", owner+"/"+repo)
+	out, _, code := env.run("skills", "add", skillName)
+	if code != 0 {
+		t.Fatalf("skills add failed: %s", out)
+	}
+
+	// Verify initial content
+	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", skillName, "skill.yaml")
+	content, err := os.ReadFile(installedPath)
+	if err != nil {
+		t.Fatalf("failed to read installed skill file: %v", err)
+	}
+	if string(content) != "version: 1\n" {
+		t.Fatalf("expected 'version: 1\\n' before update, got %q", string(content))
+	}
+
+	// Push an updated version to the upstream
+	if err := os.WriteFile(filepath.Join(upstreamDir, ".opencode", "skills", skillName, "skill.yaml"), []byte("version: 2\n"), 0644); err != nil {
+		t.Fatalf("failed to write updated skill file: %v", err)
+	}
+	mustExec(t, upstreamDir, "git", "add", ".")
+	mustExec(t, upstreamDir, "git", "commit", "-m", "update skill")
+
+	// Run skills update for the specific skill
+	out, _, code = env.run("skills", "update", skillName)
+	if code != 0 {
+		t.Fatalf("expected exit 0 from skills update, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, fmt.Sprintf("Updated skill %q", skillName)) {
+		t.Errorf("expected 'Updated skill' in output, got:\n%s", out)
+	}
+
+	// Verify updated content
+	content, err = os.ReadFile(installedPath)
+	if err != nil {
+		t.Fatalf("failed to read installed skill file after update: %v", err)
+	}
+	if string(content) != "version: 2\n" {
+		t.Fatalf("expected 'version: 2\\n' after update, got %q", string(content))
+	}
+}
+
+func TestSkillsUpdate_GitHub_AllSkills(t *testing.T) {
+	env := newTestEnv(t)
+	owner, repo, skillName := "test-owner2", "test-repo2", "all-update-skill"
+
+	upstreamDir := makeGitUpstreamWithSkill(t, env, owner, repo, skillName, "v: 1\n")
+	env.run("registry", "add", "github", owner+"/"+repo)
+	env.run("skills", "add", skillName)
+
+	// Push an update
+	if err := os.WriteFile(filepath.Join(upstreamDir, ".opencode", "skills", skillName, "skill.yaml"), []byte("v: 2\n"), 0644); err != nil {
+		t.Fatalf("failed to write updated skill: %v", err)
+	}
+	mustExec(t, upstreamDir, "git", "add", ".")
+	mustExec(t, upstreamDir, "git", "commit", "-m", "update")
+
+	// Run skills update with no args (updates all GitHub skills)
+	out, _, code := env.run("skills", "update")
+	if code != 0 {
+		t.Fatalf("expected exit 0 from skills update, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, fmt.Sprintf("Updated skill %q", skillName)) {
+		t.Errorf("expected 'Updated skill' in output, got:\n%s", out)
+	}
+
+	// Verify updated content
+	installedPath := filepath.Join(env.projectDir, ".opencode", "skills", skillName, "skill.yaml")
+	content, err := os.ReadFile(installedPath)
+	if err != nil {
+		t.Fatalf("failed to read installed skill file after update: %v", err)
+	}
+	if string(content) != "v: 2\n" {
+		t.Fatalf("expected 'v: 2\\n' after update, got %q", string(content))
+	}
+}
+
+// ---- Agents update tests ----
+
+func TestAgentsUpdate_NoManagedAgents(t *testing.T) {
+	env := newTestEnv(t)
+	out, _, code := env.run("agents", "update")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "No agents managed") {
+		t.Errorf("expected 'No agents managed' in output, got:\n%s", out)
+	}
+}
+
+func TestAgentsUpdate_NoGitHubAgents(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "my-agent")
+	env.run("registry", "add", "local", regDir)
+	env.run("agents", "add", "my-agent")
+
+	out, _, code := env.run("agents", "update")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "No agents from GitHub registries") {
+		t.Errorf("expected 'No agents from GitHub registries' in output, got:\n%s", out)
+	}
+}
+
+func TestAgentsUpdate_NotManaged(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("agents", "update", "nonexistent")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when agent not managed")
+	}
+	if !strings.Contains(errOut, "not managed") {
+		t.Errorf("expected 'not managed' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestAgentsUpdate_SkipsLocalRegistry(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "my-agent")
+	env.run("registry", "add", "local", regDir)
+	env.run("agents", "add", "my-agent")
+
+	out, _, code := env.run("agents", "update", "my-agent")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "Skipping") {
+		t.Errorf("expected 'Skipping' in output for non-GitHub agent, got:\n%s", out)
+	}
+}
+
+func TestAgentsUpdate_GitHub_SpecificAgent(t *testing.T) {
+	env := newTestEnv(t)
+	owner, repo, agentName := "test-owner-a", "test-repo-a", "my-agent"
+
+	upstreamDir := makeGitUpstreamWithAgent(t, env, owner, repo, agentName, "version 1 content\n")
+
+	env.run("registry", "add", "github", owner+"/"+repo)
+	out, _, code := env.run("agents", "add", agentName)
+	if code != 0 {
+		t.Fatalf("agents add failed: %s", out)
+	}
+
+	// Verify initial content
+	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", agentName+".md")
+	content, err := os.ReadFile(installedPath)
+	if err != nil {
+		t.Fatalf("failed to read installed agent file: %v", err)
+	}
+	if string(content) != "version 1 content\n" {
+		t.Fatalf("expected 'version 1 content\\n' before update, got %q", string(content))
+	}
+
+	// Push an updated version
+	agentsDir := filepath.Join(upstreamDir, ".opencode", "agents")
+	if err := os.WriteFile(filepath.Join(agentsDir, agentName+".md"), []byte("version 2 content\n"), 0644); err != nil {
+		t.Fatalf("failed to write updated agent file: %v", err)
+	}
+	mustExec(t, upstreamDir, "git", "add", ".")
+	mustExec(t, upstreamDir, "git", "commit", "-m", "update agent")
+
+	// Run agents update for the specific agent
+	out, _, code = env.run("agents", "update", agentName)
+	if code != 0 {
+		t.Fatalf("expected exit 0 from agents update, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, fmt.Sprintf("Updated agent %q", agentName)) {
+		t.Errorf("expected 'Updated agent' in output, got:\n%s", out)
+	}
+
+	// Verify updated content
+	content, err = os.ReadFile(installedPath)
+	if err != nil {
+		t.Fatalf("failed to read installed agent file after update: %v", err)
+	}
+	if string(content) != "version 2 content\n" {
+		t.Fatalf("expected 'version 2 content\\n' after update, got %q", string(content))
+	}
+}
+
+func TestAgentsUpdate_GitHub_AllAgents(t *testing.T) {
+	env := newTestEnv(t)
+	owner, repo, agentName := "test-owner-b", "test-repo-b", "all-update-agent"
+
+	upstreamDir := makeGitUpstreamWithAgent(t, env, owner, repo, agentName, "v1\n")
+	env.run("registry", "add", "github", owner+"/"+repo)
+	env.run("agents", "add", agentName)
+
+	// Push an update
+	agentsDir := filepath.Join(upstreamDir, ".opencode", "agents")
+	if err := os.WriteFile(filepath.Join(agentsDir, agentName+".md"), []byte("v2\n"), 0644); err != nil {
+		t.Fatalf("failed to write updated agent: %v", err)
+	}
+	mustExec(t, upstreamDir, "git", "add", ".")
+	mustExec(t, upstreamDir, "git", "commit", "-m", "update")
+
+	// Run agents update with no args (updates all GitHub agents)
+	out, _, code := env.run("agents", "update")
+	if code != 0 {
+		t.Fatalf("expected exit 0 from agents update, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, fmt.Sprintf("Updated agent %q", agentName)) {
+		t.Errorf("expected 'Updated agent' in output, got:\n%s", out)
+	}
+
+	// Verify updated content
+	installedPath := filepath.Join(env.projectDir, ".opencode", "agents", agentName+".md")
+	content, err := os.ReadFile(installedPath)
+	if err != nil {
+		t.Fatalf("failed to read installed agent file after update: %v", err)
+	}
+	if string(content) != "v2\n" {
+		t.Fatalf("expected 'v2\\n' after update, got %q", string(content))
+	}
+}

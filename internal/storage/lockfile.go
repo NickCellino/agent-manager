@@ -103,6 +103,16 @@ func GetGitCommit(repoPath string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// PullGitHubRegistry pulls the latest changes for a cloned GitHub registry
+func PullGitHubRegistry(repoPath string) error {
+	cmd := exec.Command("git", "-C", repoPath, "pull")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to pull repository: %w\nOutput: %s", err, string(output))
+	}
+	return nil
+}
+
 // SanitizeRegistryLocation converts a registry location to a filesystem-safe string
 // e.g., "darrenhinde/OpenAgentsControl" -> "darrenhinde-openagentscontrol"
 func SanitizeRegistryLocation(location string) string {
