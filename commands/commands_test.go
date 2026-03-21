@@ -1290,3 +1290,269 @@ func TestAgentsUpdate_GitHub_AllAgents(t *testing.T) {
 		t.Fatalf("expected 'v2\\n' after update, got %q", string(content))
 	}
 }
+
+// ---- Pack tests ----
+
+func TestPackList_Empty(t *testing.T) {
+	env := newTestEnv(t)
+	out, _, code := env.run("pack", "list")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "No packs configured") {
+		t.Errorf("expected 'No packs configured' in output, got:\n%s", out)
+	}
+}
+
+func TestPackAdd(t *testing.T) {
+	env := newTestEnv(t)
+	out, _, code := env.run("pack", "add", "my-pack")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, `Added pack "my-pack"`) {
+		t.Errorf("expected 'Added pack' in output, got:\n%s", out)
+	}
+}
+
+func TestPackAdd_MissingArgs(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("pack", "add")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when name arg is missing")
+	}
+	if !strings.Contains(errOut, "usage:") {
+		t.Errorf("expected 'usage:' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestPackAdd_Duplicate(t *testing.T) {
+	env := newTestEnv(t)
+	env.run("pack", "add", "my-pack")
+	_, errOut, code := env.run("pack", "add", "my-pack")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when adding duplicate pack")
+	}
+	if !strings.Contains(errOut, "already exists") {
+		t.Errorf("expected 'already exists' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestPackList_AfterAdd(t *testing.T) {
+	env := newTestEnv(t)
+	env.run("pack", "add", "alpha")
+	env.run("pack", "add", "beta")
+
+	out, _, code := env.run("pack", "list")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "alpha") {
+		t.Errorf("expected 'alpha' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "beta") {
+		t.Errorf("expected 'beta' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "2 total") {
+		t.Errorf("expected '2 total' in output, got:\n%s", out)
+	}
+}
+
+func TestPackRemove(t *testing.T) {
+	env := newTestEnv(t)
+	env.run("pack", "add", "my-pack")
+
+	out, _, code := env.run("pack", "remove", "my-pack")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, `Removed pack "my-pack"`) {
+		t.Errorf("expected 'Removed pack' in output, got:\n%s", out)
+	}
+
+	// Verify it is gone
+	listOut, _, _ := env.run("pack", "list")
+	if !strings.Contains(listOut, "No packs configured") {
+		t.Errorf("expected pack to be absent after removal, list output:\n%s", listOut)
+	}
+}
+
+func TestPackRemove_NotFound(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("pack", "remove", "nonexistent")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when removing nonexistent pack")
+	}
+	if !strings.Contains(errOut, "not found") {
+		t.Errorf("expected 'not found' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestPackRemove_MissingArgs(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("pack", "remove")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when name arg is missing")
+	}
+	if !strings.Contains(errOut, "usage:") {
+		t.Errorf("expected 'usage:' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestPackUpdate_NotFound(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("pack", "update", "nonexistent")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when updating nonexistent pack")
+	}
+	if !strings.Contains(errOut, "not found") {
+		t.Errorf("expected 'not found' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestPackUpdate_MissingArgs(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("pack", "update")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when name arg is missing")
+	}
+	if !strings.Contains(errOut, "usage:") {
+		t.Errorf("expected 'usage:' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestPackInstall_NotFound(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("pack", "install", "nonexistent")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when installing nonexistent pack")
+	}
+	if !strings.Contains(errOut, "not found") {
+		t.Errorf("expected 'not found' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestPackInstall_MissingArgs(t *testing.T) {
+	env := newTestEnv(t)
+	_, errOut, code := env.run("pack", "install")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when name arg is missing")
+	}
+	if !strings.Contains(errOut, "usage:") {
+		t.Errorf("expected 'usage:' in stderr, got:\n%s", errOut)
+	}
+}
+
+func TestPackInstall_EmptyPack(t *testing.T) {
+	env := newTestEnv(t)
+	env.run("pack", "add", "empty-pack")
+
+	out, _, code := env.run("pack", "install", "empty-pack")
+	if code != 0 {
+		t.Fatalf("expected exit 0 installing empty pack, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, "installed") {
+		t.Errorf("expected 'installed' summary in output, got:\n%s", out)
+	}
+}
+
+func TestPackInstall_WithSkills(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistry(t, "skill-a", "skill-b")
+	env.run("registry", "add", "local", regDir)
+
+	// Build a pack JSON with those skills and write it directly to the packs.json file
+	// so we can test pack install without a TUI.
+	packsFile := filepath.Join(env.xdgDataHome, "agent-manager", "packs.json")
+	if err := os.MkdirAll(filepath.Dir(packsFile), 0755); err != nil {
+		t.Fatalf("failed to create packs dir: %v", err)
+	}
+	packsJSON := fmt.Sprintf(`{"packs":[{"name":"skill-pack","skills":[{"name":"skill-a","registry":{"type":"local","location":%q}},{"name":"skill-b","registry":{"type":"local","location":%q}}],"agents":[]}]}`,
+		regDir, regDir)
+	if err := os.WriteFile(packsFile, []byte(packsJSON), 0644); err != nil {
+		t.Fatalf("failed to write packs file: %v", err)
+	}
+
+	out, _, code := env.run("pack", "install", "skill-pack")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, `Installed skill "skill-a"`) {
+		t.Errorf("expected 'Installed skill \"skill-a\"' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, `Installed skill "skill-b"`) {
+		t.Errorf("expected 'Installed skill \"skill-b\"' in output, got:\n%s", out)
+	}
+
+	// Verify skills exist on disk
+	for _, skillName := range []string{"skill-a", "skill-b"} {
+		installedPath := filepath.Join(env.projectDir, ".opencode", "skills", skillName)
+		if _, err := os.Lstat(installedPath); os.IsNotExist(err) {
+			t.Errorf("expected skill %q to be installed at %s", skillName, installedPath)
+		}
+	}
+}
+
+func TestPackInstall_WithAgents(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistryWithAgents(t, "agent-a", "agent-b")
+	env.run("registry", "add", "local", regDir)
+
+	// Write a pack JSON with agents directly
+	packsFile := filepath.Join(env.xdgDataHome, "agent-manager", "packs.json")
+	if err := os.MkdirAll(filepath.Dir(packsFile), 0755); err != nil {
+		t.Fatalf("failed to create packs dir: %v", err)
+	}
+	packsJSON := fmt.Sprintf(`{"packs":[{"name":"agent-pack","skills":[],"agents":[{"name":"agent-a","registry":{"type":"local","location":%q}},{"name":"agent-b","registry":{"type":"local","location":%q}}]}]}`,
+		regDir, regDir)
+	if err := os.WriteFile(packsFile, []byte(packsJSON), 0644); err != nil {
+		t.Fatalf("failed to write packs file: %v", err)
+	}
+
+	out, _, code := env.run("pack", "install", "agent-pack")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, `Installed agent "agent-a"`) {
+		t.Errorf("expected 'Installed agent \"agent-a\"' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, `Installed agent "agent-b"`) {
+		t.Errorf("expected 'Installed agent \"agent-b\"' in output, got:\n%s", out)
+	}
+
+	// Verify agents exist on disk
+	for _, agentName := range []string{"agent-a", "agent-b"} {
+		installedPath := filepath.Join(env.projectDir, ".opencode", "agents", agentName+".md")
+		if _, err := os.Lstat(installedPath); os.IsNotExist(err) {
+			t.Errorf("expected agent %q to be installed at %s", agentName, installedPath)
+		}
+	}
+}
+
+func TestPackInstall_AlreadyInstalled(t *testing.T) {
+	env := newTestEnv(t)
+	regDir := makeLocalRegistry(t, "my-skill")
+	env.run("registry", "add", "local", regDir)
+
+	// Install the skill manually first
+	env.run("skills", "add", "my-skill")
+
+	// Write a pack that contains the already-installed skill
+	packsFile := filepath.Join(env.xdgDataHome, "agent-manager", "packs.json")
+	if err := os.MkdirAll(filepath.Dir(packsFile), 0755); err != nil {
+		t.Fatalf("failed to create packs dir: %v", err)
+	}
+	packsJSON := fmt.Sprintf(`{"packs":[{"name":"my-pack","skills":[{"name":"my-skill","registry":{"type":"local","location":%q}}],"agents":[]}]}`,
+		regDir)
+	if err := os.WriteFile(packsFile, []byte(packsJSON), 0644); err != nil {
+		t.Fatalf("failed to write packs file: %v", err)
+	}
+
+	out, _, code := env.run("pack", "install", "my-pack")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stdout: %s", code, out)
+	}
+	if !strings.Contains(out, "already installed") {
+		t.Errorf("expected 'already installed' for duplicate skill, got:\n%s", out)
+	}
+}
