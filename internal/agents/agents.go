@@ -229,6 +229,56 @@ func RemoveAgentFromProject(entry *models.LockFileEntry, lockFile *models.LockFi
 	return storage.RemoveAgentFromLockFile(lockFile, entry.Name, entry.Registry)
 }
 
+// UpdateAgentInProject updates an agent installed from a GitHub registry to the latest
+// version. It pulls the registry, re-copies the agent file, and updates the commit
+// hash in the lock file. The entry must be a pointer to an element of lockFile.Agents
+// so that in-place updates are reflected when SaveLockFile is called.
+func UpdateAgentInProject(entry *models.LockFileEntry, lockFile *models.LockFile) error {
+	if entry.Registry.Type != models.RegistryTypeGitHub {
+		return fmt.Errorf("agent %q is not from a GitHub registry", entry.Name)
+	}
+
+	registryPath := getGitHubRegistryPath(entry.Registry.Location)
+
+	if err := storage.PullGitHubRegistry(registryPath); err != nil {
+		return fmt.Errorf("failed to update registry %s: %w", entry.Registry.Location, err)
+	}
+
+	// Re-discover the agent in the refreshed registry
+	allAgents, err := DiscoverAgentsInRegistry(entry.Registry)
+	if err != nil {
+		return fmt.Errorf("failed to discover agents in registry: %w", err)
+	}
+
+	var found *models.Agent
+	for i := range allAgents {
+		if allAgents[i].Name == entry.Name {
+			found = &allAgents[i]
+			break
+		}
+	}
+	if found == nil {
+		return fmt.Errorf("agent %q not found in registry %s after update", entry.Name, entry.Registry.Location)
+	}
+
+	// Remove old file and re-copy from the updated registry
+	agentsDir := GetProjectAgentsDir()
+	if err := RemoveAgent(entry.InstalledPath, agentsDir); err != nil {
+		return fmt.Errorf("failed to remove old agent file: %w", err)
+	}
+	if err := InstallAgent(*found, agentsDir, entry.InstalledPath); err != nil {
+		return fmt.Errorf("failed to install updated agent: %w", err)
+	}
+
+	// Update the commit hash in-place and persist the lock file
+	commit, err := storage.GetGitCommit(registryPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to get commit hash for %s: %v\n", entry.Registry.Location, err)
+	}
+	entry.Commit = commit
+	return storage.SaveLockFile(lockFile)
+}
+
 // GetProjectAgentsDir returns the path to the project's agents directory.
 func GetProjectAgentsDir() string {
 	return ".opencode/agents"

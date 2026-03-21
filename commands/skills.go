@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/urfave/cli/v2"
@@ -23,7 +24,8 @@ Use subcommands for non-interactive operation:
   list       List all available skills from configured registries
   installed  List skills currently installed in this project
   add        Add a skill to this project
-  remove     Remove a skill from this project`,
+  remove     Remove a skill from this project
+  update     Update installed skills from their GitHub registries`,
 		Subcommands: []*cli.Command{
 			{
 				Name:  "list",
@@ -211,6 +213,69 @@ Examples:
 					}
 
 					fmt.Printf("Removed skill %q\n", skillName)
+					return nil
+				},
+			},
+			{
+				Name:      "update",
+				Usage:     "Update installed skills from their GitHub registries",
+				ArgsUsage: "[name]",
+				Description: `Update skills installed from GitHub registries to their latest version.
+
+If a skill name is provided, only that skill is updated.
+If no name is provided, all skills from GitHub registries are updated.
+
+Examples:
+  agent-manager skills update
+  agent-manager skills update my-skill`,
+				Action: func(c *cli.Context) error {
+					lockFile, err := storage.LoadLockFile()
+					if err != nil {
+						return err
+					}
+
+					// Determine which entries to update
+					var toUpdate []*models.LockFileEntry
+					if c.NArg() > 0 {
+						skillName := c.Args().Get(0)
+						for i, e := range lockFile.Skills {
+							if e.Name == skillName || e.InstalledPath == skillName {
+								toUpdate = append(toUpdate, &lockFile.Skills[i])
+								break
+							}
+						}
+						if len(toUpdate) == 0 {
+							return fmt.Errorf("skill %q is not managed by agent-manager in this project", skillName)
+						}
+					} else {
+						if len(lockFile.Skills) == 0 {
+							fmt.Println("No skills managed by agent-manager in this project.")
+							return nil
+						}
+						for i := range lockFile.Skills {
+							if lockFile.Skills[i].Registry.Type == models.RegistryTypeGitHub {
+								toUpdate = append(toUpdate, &lockFile.Skills[i])
+							}
+						}
+						if len(toUpdate) == 0 {
+							fmt.Println("No skills from GitHub registries to update.")
+							return nil
+						}
+					}
+
+					for _, entry := range toUpdate {
+						if entry.Registry.Type != models.RegistryTypeGitHub {
+							fmt.Printf("Skipping %q: not from a GitHub registry\n", entry.Name)
+							continue
+						}
+						fmt.Printf("Updating skill %q...\n", entry.Name)
+						if err := skills.UpdateSkillInProject(entry, lockFile); err != nil {
+							fmt.Fprintf(os.Stderr, "Error: failed to update skill %q: %v\n", entry.Name, err)
+							continue
+						}
+						fmt.Printf("Updated skill %q\n", entry.Name)
+					}
+
 					return nil
 				},
 			},

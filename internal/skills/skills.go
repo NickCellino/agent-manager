@@ -281,6 +281,56 @@ func RemoveSkillFromProject(entry *models.LockFileEntry, lockFile *models.LockFi
 	return storage.RemoveSkillFromLockFile(lockFile, entry.Name, entry.Registry)
 }
 
+// UpdateSkillInProject updates a skill installed from a GitHub registry to the latest
+// version. It pulls the registry, re-copies the skill files, and updates the commit
+// hash in the lock file. The entry must be a pointer to an element of lockFile.Skills
+// so that in-place updates are reflected when SaveLockFile is called.
+func UpdateSkillInProject(entry *models.LockFileEntry, lockFile *models.LockFile) error {
+	if entry.Registry.Type != models.RegistryTypeGitHub {
+		return fmt.Errorf("skill %q is not from a GitHub registry", entry.Name)
+	}
+
+	registryPath := getGitHubRegistryPath(entry.Registry.Location)
+
+	if err := storage.PullGitHubRegistry(registryPath); err != nil {
+		return fmt.Errorf("failed to update registry %s: %w", entry.Registry.Location, err)
+	}
+
+	// Re-discover the skill in the refreshed registry
+	allSkills, err := DiscoverSkillsInRegistry(entry.Registry)
+	if err != nil {
+		return fmt.Errorf("failed to discover skills in registry: %w", err)
+	}
+
+	var found *models.Skill
+	for i := range allSkills {
+		if allSkills[i].Name == entry.Name {
+			found = &allSkills[i]
+			break
+		}
+	}
+	if found == nil {
+		return fmt.Errorf("skill %q not found in registry %s after update", entry.Name, entry.Registry.Location)
+	}
+
+	// Remove old files and re-copy from the updated registry
+	skillsDir := GetProjectSkillsDir()
+	if err := RemoveSkill(entry.InstalledPath, skillsDir); err != nil {
+		return fmt.Errorf("failed to remove old skill files: %w", err)
+	}
+	if err := InstallSkill(*found, skillsDir, entry.InstalledPath); err != nil {
+		return fmt.Errorf("failed to install updated skill: %w", err)
+	}
+
+	// Update the commit hash in-place and persist the lock file
+	commit, err := storage.GetGitCommit(registryPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to get commit hash for %s: %v\n", entry.Registry.Location, err)
+	}
+	entry.Commit = commit
+	return storage.SaveLockFile(lockFile)
+}
+
 // GetProjectSkillsDir returns the path to the project's skills directory
 func GetProjectSkillsDir() string {
 	// First check for .opencode/skills

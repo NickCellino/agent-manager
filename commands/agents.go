@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/urfave/cli/v2"
@@ -23,7 +24,8 @@ Use subcommands for non-interactive operation:
   list       List all available agents from configured registries
   installed  List agents currently installed in this project
   add        Add an agent to this project
-  remove     Remove an agent from this project`,
+  remove     Remove an agent from this project
+  update     Update installed agents from their GitHub registries`,
 		Subcommands: []*cli.Command{
 			{
 				Name:  "list",
@@ -208,6 +210,69 @@ Examples:
 					}
 
 					fmt.Printf("Removed agent %q\n", agentName)
+					return nil
+				},
+			},
+			{
+				Name:      "update",
+				Usage:     "Update installed agents from their GitHub registries",
+				ArgsUsage: "[name]",
+				Description: `Update agents installed from GitHub registries to their latest version.
+
+If an agent name is provided, only that agent is updated.
+If no name is provided, all agents from GitHub registries are updated.
+
+Examples:
+  agent-manager agents update
+  agent-manager agents update my-agent`,
+				Action: func(c *cli.Context) error {
+					lockFile, err := storage.LoadLockFile()
+					if err != nil {
+						return err
+					}
+
+					// Determine which entries to update
+					var toUpdate []*models.LockFileEntry
+					if c.NArg() > 0 {
+						agentName := c.Args().Get(0)
+						for i, e := range lockFile.Agents {
+							if e.Name == agentName || e.InstalledPath == agentName {
+								toUpdate = append(toUpdate, &lockFile.Agents[i])
+								break
+							}
+						}
+						if len(toUpdate) == 0 {
+							return fmt.Errorf("agent %q is not managed by agent-manager in this project", agentName)
+						}
+					} else {
+						if len(lockFile.Agents) == 0 {
+							fmt.Println("No agents managed by agent-manager in this project.")
+							return nil
+						}
+						for i := range lockFile.Agents {
+							if lockFile.Agents[i].Registry.Type == models.RegistryTypeGitHub {
+								toUpdate = append(toUpdate, &lockFile.Agents[i])
+							}
+						}
+						if len(toUpdate) == 0 {
+							fmt.Println("No agents from GitHub registries to update.")
+							return nil
+						}
+					}
+
+					for _, entry := range toUpdate {
+						if entry.Registry.Type != models.RegistryTypeGitHub {
+							fmt.Printf("Skipping %q: not from a GitHub registry\n", entry.Name)
+							continue
+						}
+						fmt.Printf("Updating agent %q...\n", entry.Name)
+						if err := agents.UpdateAgentInProject(entry, lockFile); err != nil {
+							fmt.Fprintf(os.Stderr, "Error: failed to update agent %q: %v\n", entry.Name, err)
+							continue
+						}
+						fmt.Printf("Updated agent %q\n", entry.Name)
+					}
+
 					return nil
 				},
 			},
