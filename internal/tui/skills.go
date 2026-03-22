@@ -2,10 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sahilm/fuzzy"
 
@@ -32,7 +35,7 @@ type SkillsModel struct {
 	textInput       textinput.Model
 	cursor          int
 	filter          string
-	mode            string // "select", "confirm-delete"
+	mode            string // "select", "confirm-delete", "skill-summary", "skill-summary-loading"
 	inputMode       string // "navigate", "filter"
 	skillsToDelete  []string
 	err             error
@@ -40,6 +43,12 @@ type SkillsModel struct {
 	height          int
 	done            bool
 	saved           bool
+	// Skill summary view fields
+	summarySpinner  spinner.Model
+	summaryContent  string
+	summaryViewport int // Scroll position for summary
+	summarySkill    models.Skill
+	summaryGlamour  *glamour.TermRenderer
 }
 
 // formatRegistryDisplay formats a registry for display.
@@ -113,6 +122,11 @@ func NewSkillsModel() (*SkillsModel, error) {
 	ti.Cursor.Style = lipgloss.NewStyle()
 	ti.Prompt = ""
 
+	// Initialize spinner for loading states
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
 	return &SkillsModel{
 		allSkills:       allSkills,
 		filteredSkills:  allSkills,
@@ -122,11 +136,12 @@ func NewSkillsModel() (*SkillsModel, error) {
 		textInput:       ti,
 		mode:            "select",
 		inputMode:       "navigate",
+		summarySpinner:  s,
 	}, nil
 }
 
 func (m *SkillsModel) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, m.summarySpinner.Tick)
 }
 
 func (m *SkillsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -135,6 +150,23 @@ func (m *SkillsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.textInput.Width = msg.Width - 20
+
+		// Re-initialize glamour renderer if in summary mode
+		if m.mode == "skill-summary" && m.summaryGlamour != nil {
+			m.initGlamourRenderer()
+			m.renderSummary()
+		}
+
+	case summaryLoadedMsg:
+		// Handle loaded summary
+		if msg.err != nil {
+			m.summaryContent = fmt.Sprintf("## %s\n\n**Error loading summary:** %v\n\n*Press 'q' to go back.*", m.summarySkill.Name, msg.err)
+		} else {
+			m.summaryContent = msg.content
+		}
+		m.mode = "skill-summary"
+		m.renderSummary()
+		return m, nil
 
 	case tea.KeyMsg:
 		switch m.mode {
@@ -167,10 +199,26 @@ func (m *SkillsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "confirm-delete":
 			return m.updateConfirmDeleteMode(msg)
+		case "skill-summary-loading", "skill-summary":
+			return m.updateSummaryMode(msg)
+		}
+
+	case spinner.TickMsg:
+		// Update spinner for loading states
+		if m.mode == "skill-summary-loading" {
+			var cmd tea.Cmd
+			m.summarySpinner, cmd = m.summarySpinner.Update(msg)
+			return m, cmd
 		}
 	}
 
 	return m, nil
+}
+
+// summaryLoadedMsg is sent when a skill summary has been loaded/generated
+type summaryLoadedMsg struct {
+	content string
+	err     error
 }
 
 func (m *SkillsModel) updateNavigateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -242,8 +290,120 @@ func (m *SkillsModel) updateNavigateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.cursor++
 				}
 				return m, nil
+			case 'i':
+				// Show skill info/summary
+				if len(m.filteredSkills) > 0 && m.cursor < len(m.filteredSkills) {
+					skill := m.filteredSkills[m.cursor]
+					return m.loadSkillSummary(skill)
+				}
+				return m, nil
 			}
 		}
+	}
+
+	return m, nil
+}
+
+// loadSkillSummary loads or generates a summary for the given skill
+func (m *SkillsModel) loadSkillSummary(skill models.Skill) (tea.Model, tea.Cmd) {
+	m.summarySkill = skill
+	m.summaryContent = ""
+	m.summaryViewport = 0
+
+	// Check cache first
+	commit := storage.GetSkillCommit(m.lockFile, skill)
+	if cached, err := storage.GetCachedSummary(skill, commit); err == nil && cached != nil {
+		// Use cached summary
+		m.summaryContent = cached.Summary
+		m.mode = "skill-summary"
+		m.initGlamourRenderer()
+		m.renderSummary()
+		return m, nil
+	}
+
+	// Need to generate summary - show loading state
+	m.mode = "skill-summary-loading"
+
+	// Load/generate summary asynchronously, and start spinner ticking
+	return m, tea.Batch(
+		m.summarySpinner.Tick,
+		func() tea.Msg {
+			// Try to generate summary
+			summary, err := skills.GenerateSkillSummary(skill)
+			if err != nil {
+				return summaryLoadedMsg{err: err}
+			}
+
+			// Cache the summary
+			if err := storage.SaveSkillSummary(skill, commit, summary); err != nil {
+				// Non-fatal: just log the error
+				fmt.Fprintf(os.Stderr, "Warning: failed to cache skill summary: %v\n", err)
+			}
+
+			return summaryLoadedMsg{content: summary}
+		},
+	)
+}
+
+// initGlamourRenderer initializes the glamour markdown renderer
+func (m *SkillsModel) initGlamourRenderer() {
+	if m.summaryGlamour != nil {
+		m.summaryGlamour.Close()
+	}
+
+	width := m.width - 4
+	if width < 20 {
+		width = 80
+	}
+
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		// If glamour fails, we'll fall back to plain text
+		m.summaryGlamour = nil
+		return
+	}
+	m.summaryGlamour = renderer
+}
+
+// renderSummary renders the markdown summary using glamour
+func (m *SkillsModel) renderSummary() {
+	if m.summaryGlamour == nil || m.summaryContent == "" {
+		return
+	}
+
+	rendered, err := m.summaryGlamour.Render(m.summaryContent)
+	if err != nil {
+		// Fall back to plain text
+		return
+	}
+	m.summaryContent = rendered
+}
+
+func (m *SkillsModel) updateSummaryMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "esc":
+		// Return to skills list
+		m.mode = "select"
+		m.summaryContent = ""
+		m.summaryViewport = 0
+		if m.summaryGlamour != nil {
+			m.summaryGlamour.Close()
+			m.summaryGlamour = nil
+		}
+		return m, nil
+	case "up", "k":
+		// Scroll up
+		if m.summaryViewport > 0 {
+			m.summaryViewport--
+		}
+		return m, nil
+	case "down", "j":
+		// Scroll down (simple implementation - could be improved)
+		m.summaryViewport++
+		return m, nil
 	}
 
 	return m, nil
@@ -340,6 +500,10 @@ func (m *SkillsModel) View() string {
 		return m.viewSelect()
 	case "confirm-delete":
 		return m.viewConfirmDelete()
+	case "skill-summary-loading":
+		return m.viewSummaryLoading()
+	case "skill-summary":
+		return m.viewSummary()
 	default:
 		return ""
 	}
@@ -396,7 +560,7 @@ func (m *SkillsModel) viewSelect() string {
 	if m.inputMode == "filter" {
 		b.WriteString("\n" + listHelpStyle.Render("esc: exit filter  type to search"))
 	} else {
-		b.WriteString("\n" + listHelpStyle.Render("/: filter  ↑/↓/j/k: navigate  space: toggle  enter: save  esc: cancel"))
+		b.WriteString("\n" + listHelpStyle.Render("/: filter  ↑/↓/j/k: navigate  space: toggle  i: info  enter: save  esc: cancel"))
 	}
 
 	return b.String()
@@ -413,6 +577,72 @@ func (m *SkillsModel) viewConfirmDelete() string {
 	}
 
 	b.WriteString("\n" + listHelpStyle.Render("y: confirm  n: cancel"))
+
+	return b.String()
+}
+
+func (m *SkillsModel) viewSummaryLoading() string {
+	var b strings.Builder
+
+	// Title bar
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#7D56F4")).
+		Padding(0, 1)
+
+	b.WriteString(titleStyle.Render(fmt.Sprintf(" Skill: %s ", m.summarySkill.Name)) + "\n\n")
+
+	// Loading spinner
+	b.WriteString(fmt.Sprintf("  %s Loading skill summary...\n", m.summarySpinner.View()))
+
+	// Help
+	b.WriteString("\n" + listHelpStyle.Render("esc: cancel"))
+
+	return b.String()
+}
+
+func (m *SkillsModel) viewSummary() string {
+	var b strings.Builder
+
+	// Title bar
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#7D56F4")).
+		Padding(0, 1)
+
+	b.WriteString(titleStyle.Render(fmt.Sprintf(" Skill: %s ", m.summarySkill.Name)) + "\n")
+
+	// Content - split into lines and show viewport window
+	lines := strings.Split(m.summaryContent, "\n")
+	viewportHeight := m.height - 6 // Reserve space for title, borders, and help
+	if viewportHeight < 5 {
+		viewportHeight = 5
+	}
+
+	startLine := m.summaryViewport
+	if startLine < 0 {
+		startLine = 0
+	}
+
+	endLine := startLine + viewportHeight
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	// Display visible lines
+	for i := startLine; i < endLine && i < len(lines); i++ {
+		b.WriteString(lines[i] + "\n")
+	}
+
+	// Show scroll indicator if needed
+	if endLine < len(lines) {
+		b.WriteString(listHelpStyle.Render(fmt.Sprintf("  ... (%d more lines)", len(lines)-endLine)) + "\n")
+	}
+
+	// Help footer
+	b.WriteString("\n" + listHelpStyle.Render("↑/↓/j/k: scroll  q/esc: back to skills list"))
 
 	return b.String()
 }

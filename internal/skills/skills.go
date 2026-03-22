@@ -362,6 +362,16 @@ func UpdateSkillInProject(entry *models.LockFileEntry, lockFile *models.LockFile
 		return fmt.Errorf("failed to install updated skill: %w", err)
 	}
 
+	// Clear the cached summary for this skill (since it's being updated)
+	oldSkill := models.Skill{
+		Name:     entry.Name,
+		Registry: entry.Registry,
+	}
+	if err := storage.ClearSkillSummary(oldSkill, entry.Commit); err != nil {
+		// Non-fatal: just log the error
+		fmt.Fprintf(os.Stderr, "Warning: failed to clear cached summary for %s: %v\n", entry.Name, err)
+	}
+
 	// Update the commit hash in-place and persist the lock file
 	commit, err := storage.GetGitCommit(registryPath)
 	if err != nil {
