@@ -476,8 +476,9 @@ func (m *PacksModel) viewUpdatePack() string {
 	// Tab headers
 	skillsTab := "  Skills  "
 	agentsTab := "  Agents  "
-	tabStyle := lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.NormalBorder(), false, false, true, false)
-	activeTabStyle := tabStyle.Copy().Bold(true).Foreground(lipgloss.Color("170")).BorderForeground(lipgloss.Color("170"))
+	tabStyle := lipgloss.NewStyle().Padding(0, 1)
+	activeTabStyle := lipgloss.NewStyle().Padding(0, 1).Bold(true).Foreground(lipgloss.Color("170"))
+	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 	if m.activeTab == 0 {
 		b.WriteString(activeTabStyle.Render(skillsTab))
@@ -486,7 +487,8 @@ func (m *PacksModel) viewUpdatePack() string {
 		b.WriteString(tabStyle.Render(skillsTab))
 		b.WriteString(activeTabStyle.Render(agentsTab))
 	}
-	b.WriteString("\n\n")
+	// Horizontal separator line
+	b.WriteString("\n" + separatorStyle.Render(strings.Repeat("─", 40)) + "\n")
 
 	// Filter line
 	if m.tabInputMode == "filter" {
