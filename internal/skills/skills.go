@@ -68,17 +68,18 @@ func DiscoverSkillsInRegistry(registry models.Registry) ([]models.Skill, error) 
 
 	var skills []models.Skill
 
-	// Search in .agents/skills
-	agentsSkillsPath := filepath.Join(registryPath, ".agents", "skills")
-	if agentsSkills, err := listSkillsInDir(agentsSkillsPath, registry); err == nil {
-		skills = append(skills, agentsSkills...)
-	}
-
-	// Search in .opencode/skills
-	opencodeSkillsPath := filepath.Join(registryPath, ".opencode", "skills")
-	if opencodeSkills, err := listSkillsInDir(opencodeSkillsPath, registry); err == nil {
-		skills = append(skills, opencodeSkills...)
-	}
+	// Recursively find all directories named "skills"
+	filepath.Walk(registryPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip directories we can't access
+		}
+		if info.IsDir() && info.Name() == "skills" {
+			if foundSkills, err := listSkillsInDir(path, registry); err == nil {
+				skills = append(skills, foundSkills...)
+			}
+		}
+		return nil
+	})
 
 	// Search in Claude-style skills/<name>/SKILL.md registries.
 	claudeSkillsPath := filepath.Join(registryPath, "skills")

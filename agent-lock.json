@@ -8,27 +8,18 @@
         "location": "NickCellino/laptop-setup"
       },
       "commit": "5d1de7576a355d0a4131e904483cc12ee9555d3e"
+    },
+    {
+      "name": "showboat",
+      "installedPath": "showboat",
+      "registry": {
+        "type": "github",
+        "location": "NickCellino/laptop-setup"
+      },
+      "commit": "5d1de7576a355d0a4131e904483cc12ee9555d3e"
     }
   ],
   "agents": [
-    {
-      "name": "ddd-evans",
-      "installedPath": "ddd-evans",
-      "registry": {
-        "type": "github",
-        "location": "NickCellino/laptop-setup"
-      },
-      "commit": "5d1de7576a355d0a4131e904483cc12ee9555d3e"
-    },
-    {
-      "name": "design-ousterhout",
-      "installedPath": "design-ousterhout",
-      "registry": {
-        "type": "github",
-        "location": "NickCellino/laptop-setup"
-      },
-      "commit": "5d1de7576a355d0a4131e904483cc12ee9555d3e"
-    },
     {
       "name": "testing-khorikov",
       "installedPath": "testing-khorikov",
