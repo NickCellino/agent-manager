@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/glamour"
 	"github.com/urfave/cli/v2"
 
 	"agent-manager/internal/models"
@@ -213,6 +214,144 @@ Examples:
 					}
 
 					fmt.Printf("Removed skill %q\n", skillName)
+					return nil
+				},
+			},
+			{
+				Name:      "info",
+				Usage:     "Show detailed information about a skill",
+				ArgsUsage: "<name>",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "registry",
+						Usage: "Registry to get info from (format: type:location, e.g. github:darrenhinde/OpenAgentsControl)",
+					},
+					&cli.BoolFlag{
+						Name:  "no-cache",
+						Usage: "Force regeneration of the summary (ignore cache)",
+					},
+				},
+				Description: `Show detailed information and summary about a skill.
+
+Examples:
+  agent-manager skills info my-skill
+  agent-manager skills info --registry github:darrenhinde/OpenAgentsControl my-skill
+  agent-manager skills info --no-cache my-skill`,
+				Action: func(c *cli.Context) error {
+					if c.NArg() < 1 {
+						return fmt.Errorf("usage: agent-manager skills info <name>")
+					}
+					skillName := c.Args().Get(0)
+					registryFlag := c.String("registry")
+					noCache := c.Bool("no-cache")
+
+					// Discover all skills
+					allSkills, err := skills.DiscoverSkills()
+					if err != nil {
+						return err
+					}
+
+					// Filter by name
+					var matching []models.Skill
+					for _, s := range allSkills {
+						if s.Name == skillName {
+							matching = append(matching, s)
+						}
+					}
+
+					if len(matching) == 0 {
+						return fmt.Errorf("skill %q not found in any configured registry", skillName)
+					}
+
+					// Resolve which skill to use
+					var chosen models.Skill
+					if len(matching) > 1 && registryFlag == "" {
+						fmt.Printf("Skill %q found in multiple registries:\n", skillName)
+						for _, s := range matching {
+							fmt.Printf("  %s:%s\n", s.Registry.Type, s.Registry.Location)
+						}
+						return fmt.Errorf("use --registry <type>:<location> to specify which registry to use")
+					} else if registryFlag != "" {
+						parts := strings.SplitN(registryFlag, ":", 2)
+						if len(parts) != 2 {
+							return fmt.Errorf("invalid registry format %q: expected type:location", registryFlag)
+						}
+						registryType := models.RegistryType(parts[0])
+						registryLocation := parts[1]
+
+						found := false
+						for _, s := range matching {
+							if s.Registry.Type == registryType && s.Registry.Location == registryLocation {
+								chosen = s
+								found = true
+								break
+							}
+						}
+						if !found {
+							return fmt.Errorf("skill %q not found in registry %s:%s", skillName, registryType, registryLocation)
+						}
+					} else {
+						chosen = matching[0]
+					}
+
+					// Load lock file to check for commit hash
+					lockFile, err := storage.LoadLockFile()
+					if err != nil {
+						return err
+					}
+
+					// Check cache first unless --no-cache is set
+					commit := storage.GetSkillCommit(lockFile, chosen)
+					var summary string
+
+					if !noCache {
+						if cached, err := storage.GetCachedSummary(chosen, commit); err == nil && cached != nil {
+							summary = cached.Summary
+							fmt.Println("=== Skill Summary (cached) ===")
+						}
+					}
+
+					if summary == "" {
+						fmt.Println("=== Generating skill summary... ===")
+						summary, err = skills.GenerateSkillSummary(chosen)
+						if err != nil {
+							return fmt.Errorf("failed to generate summary: %w", err)
+						}
+
+						// Cache the summary
+						if err := storage.SaveSkillSummary(chosen, commit, summary); err != nil {
+							fmt.Fprintf(os.Stderr, "Warning: failed to cache summary: %v\n", err)
+						}
+					}
+
+					// Show skill info
+					fmt.Printf("\n=== Skill: %s ===\n", chosen.Name)
+					fmt.Printf("Registry: %s (%s)\n", chosen.Registry.Type, chosen.Registry.Location)
+					if commit != "" {
+						fmt.Printf("Commit: %s\n", commit[:8])
+					}
+					fmt.Printf("Source: %s\n\n", chosen.SourcePath)
+
+					// Render with glamour
+					fmt.Println("=== Summary ===")
+
+					// Try to render with glamour for better formatting
+					renderer, err := glamour.NewTermRenderer(
+						glamour.WithAutoStyle(),
+						glamour.WithWordWrap(100),
+					)
+					if err == nil {
+						rendered, err := renderer.Render(summary)
+						if err == nil {
+							fmt.Println(rendered)
+						} else {
+							fmt.Println(summary)
+						}
+						renderer.Close()
+					} else {
+						fmt.Println(summary)
+					}
+
 					return nil
 				},
 			},

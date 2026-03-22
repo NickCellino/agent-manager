@@ -165,7 +165,7 @@ func (m *SkillsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.summaryContent = msg.content
 		}
 		m.mode = "skill-summary"
-		m.renderSummary()
+		m.initGlamourRenderer() // Initialize glamour before rendering
 		return m, nil
 
 	case tea.KeyMsg:
@@ -317,7 +317,6 @@ func (m *SkillsModel) loadSkillSummary(skill models.Skill) (tea.Model, tea.Cmd) 
 		m.summaryContent = cached.Summary
 		m.mode = "skill-summary"
 		m.initGlamourRenderer()
-		m.renderSummary()
 		return m, nil
 	}
 
@@ -369,17 +368,17 @@ func (m *SkillsModel) initGlamourRenderer() {
 }
 
 // renderSummary renders the markdown summary using glamour
-func (m *SkillsModel) renderSummary() {
+func (m *SkillsModel) renderSummary() string {
 	if m.summaryGlamour == nil || m.summaryContent == "" {
-		return
+		return m.summaryContent
 	}
 
 	rendered, err := m.summaryGlamour.Render(m.summaryContent)
 	if err != nil {
 		// Fall back to plain text
-		return
+		return m.summaryContent
 	}
-	m.summaryContent = rendered
+	return rendered
 }
 
 func (m *SkillsModel) updateSummaryMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -614,8 +613,16 @@ func (m *SkillsModel) viewSummary() string {
 
 	b.WriteString(titleStyle.Render(fmt.Sprintf(" Skill: %s ", m.summarySkill.Name)) + "\n")
 
+	// Ensure glamour renderer is initialized
+	if m.summaryGlamour == nil {
+		m.initGlamourRenderer()
+	}
+
+	// Render the markdown content (or use plain text if glamour fails)
+	contentToDisplay := m.renderSummary()
+
 	// Content - split into lines and show viewport window
-	lines := strings.Split(m.summaryContent, "\n")
+	lines := strings.Split(contentToDisplay, "\n")
 	viewportHeight := m.height - 6 // Reserve space for title, borders, and help
 	if viewportHeight < 5 {
 		viewportHeight = 5
@@ -631,9 +638,9 @@ func (m *SkillsModel) viewSummary() string {
 		endLine = len(lines)
 	}
 
-	// Display visible lines
+	// Display visible lines (trim trailing whitespace from glamour output)
 	for i := startLine; i < endLine && i < len(lines); i++ {
-		b.WriteString(lines[i] + "\n")
+		b.WriteString(strings.TrimRight(lines[i], " ") + "\n")
 	}
 
 	// Show scroll indicator if needed

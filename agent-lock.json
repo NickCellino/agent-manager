@@ -17,6 +17,15 @@
         "location": "NickCellino/laptop-setup"
       },
       "commit": "5d1de7576a355d0a4131e904483cc12ee9555d3e"
+    },
+    {
+      "name": "native-web-search",
+      "installedPath": "native-web-search",
+      "registry": {
+        "type": "github",
+        "location": "mitsuhiko/agent-stuff"
+      },
+      "commit": "f0f29f95a03a3d4e00b6aaefabcef702e81c1719"
     }
   ],
   "agents": [
