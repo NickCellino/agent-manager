@@ -46,3 +46,21 @@ type LockFile struct {
 	Skills []LockFileEntry `json:"skills"`
 	Agents []LockFileEntry `json:"agents"`
 }
+
+// PackItem represents a skill or agent reference stored in a pack
+type PackItem struct {
+	Name     string   `json:"name"`
+	Registry Registry `json:"registry"`
+}
+
+// Pack represents a named collection of skills and agents
+type Pack struct {
+	Name   string     `json:"name"`
+	Skills []PackItem `json:"skills"`
+	Agents []PackItem `json:"agents"`
+}
+
+// PackStore represents the persisted pack configuration
+type PackStore struct {
+	Packs []Pack `json:"packs"`
+}

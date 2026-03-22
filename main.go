@@ -31,6 +31,7 @@ COMMANDS:
    registry, registries    Manage skill registries
    skills                  Manage skills for the current project
    agents                  Manage agents for the current project
+   pack, packs             Manage packs of skills and agents
    help, h                 Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -121,6 +122,7 @@ func main() {
 			commands.SkillsCommand(),
 			commands.AgentsCommand(),
 			commands.RegistryCommand(),
+			commands.PacksCommand(),
 		},
 	}
 
