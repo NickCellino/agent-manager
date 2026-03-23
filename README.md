@@ -31,22 +31,25 @@ go install
 
 ## Example Workflow
 
-Here is a complete example that adds a registry, installs a skill from it, and then installs an agent.
+Here is a complete example that adds multiple registries, installs a skill, and then installs an agent.
 
 ```bash
 # 1. Add a GitHub repository as a registry
 agent-manager registry add github NickCellino/laptop-setup
 
-# 2. See what skills are available in the registry
+# 2. Also add a local directory as a registry
+agent-manager registry add local ~/Code/my-local-skills
+
+# 3. See what skills are available across all configured registries
 agent-manager skills list
 
-# 3. Install a skill into the current project
+# 4. Install a skill into the current project
 agent-manager skills add my-skill
 
-# 4. See what agents are available in the registry
+# 5. See what agents are available across all configured registries
 agent-manager agents list
 
-# 5. Install an agent into the current project
+# 6. Install an agent into the current project
 agent-manager agents add my-agent
 ```
 
@@ -54,6 +57,9 @@ After these steps:
 - `my-skill` is copied into `.opencode/skills/my-skill/` in your project
 - `my-agent` is copied into `.opencode/agents/my-agent.md` in your project
 - Both are recorded in `agent-lock.json` so they can be updated or removed later
+
+> **Note:** `skills list` and `agents list` show results from **all** configured registries combined.
+> If the same skill or agent name exists in multiple registries, use the `--registry` flag when adding it to specify which one to use.
 
 ---
 
