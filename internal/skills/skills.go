@@ -80,6 +80,12 @@ func DiscoverSkillsInRegistry(registry models.Registry) ([]models.Skill, error) 
 		skills = append(skills, opencodeSkills...)
 	}
 
+	// Search in Claude-style skills/<name>/SKILL.md registries.
+	claudeSkillsPath := filepath.Join(registryPath, "skills")
+	if claudeSkills, err := listClaudeSkillsInDir(claudeSkillsPath, registry); err == nil {
+		skills = append(skills, claudeSkills...)
+	}
+
 	return skills, nil
 }
 
@@ -103,6 +109,39 @@ func listSkillsInDir(dir string, registry models.Registry) ([]models.Skill, erro
 				SourcePath: filepath.Join(dir, entry.Name()),
 			})
 		}
+	}
+
+	return skills, nil
+}
+
+// listClaudeSkillsInDir lists skills stored as skills/<name>/SKILL.md.
+func listClaudeSkillsInDir(dir string, registry models.Registry) ([]models.Skill, error) {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var skills []models.Skill
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		skillPath := filepath.Join(dir, entry.Name())
+		manifestPath := filepath.Join(skillPath, "SKILL.md")
+		if _, err := os.Stat(manifestPath); err != nil {
+			continue
+		}
+
+		skills = append(skills, models.Skill{
+			Name:       entry.Name(),
+			Registry:   registry,
+			SourcePath: skillPath,
+		})
 	}
 
 	return skills, nil

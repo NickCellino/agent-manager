@@ -252,11 +252,13 @@ When scanning a registry for available skills and agents, agent-manager uses dif
 
 ### Skills
 
-Skills are discovered as subdirectories within:
+Skills are discovered from these registry layouts:
 - `.agents/skills/`
 - `.opencode/skills/`
+- `skills/<name>/SKILL.md`
 
-Each subdirectory is treated as an individual skill.
+For `.agents/skills/` and `.opencode/skills/`, each immediate subdirectory is treated as an individual skill.
+For `skills/<name>/SKILL.md`, the parent directory name becomes the skill name.
 
 ### Agents
 
@@ -269,7 +271,7 @@ Note: Files in subdirectories of `agents/` are not recognized (e.g., `agents/sub
 ## How Skills and Agents Are Stored
 
 - **GitHub registries** are cloned to `~/.local/share/agent-manager/github-registries/<owner>/<repo>` on first use
-- Skills are discovered inside `.agents/skills/` or `.opencode/skills/` within each registry
+- Skills are discovered inside `.agents/skills/`, `.opencode/skills/`, or `skills/<name>/SKILL.md` within each registry
 - Agents are discovered as `.md` files inside any `agents/` directory within each registry
 - Installed skills are copied (GitHub) or symlinked (local) into `.opencode/skills/` in your project
 - Installed agents are copied (GitHub) or symlinked (local) into `.opencode/agents/` in your project

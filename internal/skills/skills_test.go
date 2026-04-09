@@ -109,3 +109,37 @@ func TestSkillDiscoveryAndInstallation(t *testing.T) {
 		t.Fatalf("Expected [project-skill], got %v", installed)
 	}
 }
+
+func TestClaudeStyleSkillDiscovery(t *testing.T) {
+	registryDir := t.TempDir()
+	skillDir := filepath.Join(registryDir, "skills", "agent-browser")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("Failed to create Claude-style skill dir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\ndescription: Browser automation\n---\n"), 0644); err != nil {
+		t.Fatalf("Failed to create SKILL.md: %v", err)
+	}
+
+	registry := models.Registry{
+		Type:     models.RegistryTypeLocal,
+		Location: registryDir,
+	}
+
+	discovered, err := skills.DiscoverSkillsInRegistry(registry)
+	if err != nil {
+		t.Fatalf("Failed to discover Claude-style skills: %v", err)
+	}
+
+	if len(discovered) != 1 {
+		t.Fatalf("Expected 1 Claude-style skill, got %d", len(discovered))
+	}
+
+	if discovered[0].Name != "agent-browser" {
+		t.Fatalf("Expected skill name 'agent-browser', got '%s'", discovered[0].Name)
+	}
+
+	if discovered[0].SourcePath != skillDir {
+		t.Fatalf("Expected source path %q, got %q", skillDir, discovered[0].SourcePath)
+	}
+}
