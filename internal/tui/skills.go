@@ -42,8 +42,8 @@ type SkillsModel struct {
 	saved           bool
 }
 
-// formatRegistryDisplay formats a registry for display
-// Shows last 2 components of location, truncated to 40 chars, colored
+// formatRegistryDisplay formats a registry for display.
+// Shows registry type plus the last 2 path components, truncated to 40 chars.
 func formatRegistryDisplay(registry models.Registry) string {
 	location := registry.Location
 
@@ -66,7 +66,7 @@ func formatRegistryDisplay(registry models.Registry) string {
 		color = "82" // green for local
 	}
 
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(fmt.Sprintf("(%s)", location))
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(fmt.Sprintf("(%s: %s)", registry.Type, location))
 }
 
 // NewSkillsModel creates a new skills selection model
@@ -293,11 +293,8 @@ func (m *SkillsModel) applyFilter() {
 	matches := fuzzy.Find(m.filter, names)
 	m.filteredSkills = nil
 	for _, match := range matches {
-		for _, skill := range m.allSkills {
-			if skill.Name == match.Str {
-				m.filteredSkills = append(m.filteredSkills, skill)
-				break
-			}
+		if match.Index >= 0 && match.Index < len(m.allSkills) {
+			m.filteredSkills = append(m.filteredSkills, m.allSkills[match.Index])
 		}
 	}
 	m.cursor = 0

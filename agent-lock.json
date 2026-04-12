@@ -1,5 +1,15 @@
 {
-  "skills": [],
+  "skills": [
+    {
+      "name": "playground",
+      "installedPath": "playground",
+      "registry": {
+        "type": "github",
+        "location": "NickCellino/laptop-setup"
+      },
+      "commit": "5d1de7576a355d0a4131e904483cc12ee9555d3e"
+    }
+  ],
   "agents": [
     {
       "name": "ddd-evans",

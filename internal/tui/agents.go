@@ -232,11 +232,8 @@ func (m *AgentsModel) applyFilter() {
 	matches := fuzzy.Find(m.filter, names)
 	m.filteredAgents = nil
 	for _, match := range matches {
-		for _, agent := range m.allAgents {
-			if agent.Name == match.Str {
-				m.filteredAgents = append(m.filteredAgents, agent)
-				break
-			}
+		if match.Index >= 0 && match.Index < len(m.allAgents) {
+			m.filteredAgents = append(m.filteredAgents, m.allAgents[match.Index])
 		}
 	}
 	m.cursor = 0
