@@ -1,7 +1,11 @@
 package tui
 
 import (
+	"fmt"
+	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"agent-manager/internal/models"
 )
@@ -45,4 +49,129 @@ func TestSkillsApplyFilterPreservesRegistryForDuplicateNames(t *testing.T) {
 	if !locations["/tmp/second-registry"] {
 		t.Fatalf("expected filtered skills to include second registry, got %#v", locations)
 	}
+}
+
+func TestSkillsVisibleRangeTracksTopMiddleAndEnd(t *testing.T) {
+	model := testSkillsModel(10, 4)
+
+	start, end := model.visibleSkillRange()
+	if start != 0 || end != 4 {
+		t.Fatalf("expected top range 0:4, got %d:%d", start, end)
+	}
+
+	model.cursor = 5
+	model.syncSkillViewport()
+	start, end = model.visibleSkillRange()
+	if start != 2 || end != 6 {
+		t.Fatalf("expected middle range 2:6, got %d:%d", start, end)
+	}
+
+	model.cursor = 9
+	model.syncSkillViewport()
+	start, end = model.visibleSkillRange()
+	if start != 6 || end != 10 {
+		t.Fatalf("expected end range 6:10, got %d:%d", start, end)
+	}
+}
+
+func TestSkillsNavigationKeepsCursorVisible(t *testing.T) {
+	model := testSkillsModel(8, 3)
+
+	for range 5 {
+		updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyDown})
+		model = updated.(*SkillsModel)
+	}
+
+	if model.cursor != 5 {
+		t.Fatalf("expected cursor at 5, got %d", model.cursor)
+	}
+
+	if model.listViewport != 3 {
+		t.Fatalf("expected viewport to scroll to 3, got %d", model.listViewport)
+	}
+
+	view := model.viewSelect()
+	if strings.Contains(view, "skill-2") {
+		t.Fatalf("expected off-screen skill-2 to be hidden, view was:\n%s", view)
+	}
+	if !strings.Contains(view, "> [ ] skill-5") {
+		t.Fatalf("expected selected skill-5 to remain visible, view was:\n%s", view)
+	}
+
+	for range 4 {
+		updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyUp})
+		model = updated.(*SkillsModel)
+	}
+
+	if model.cursor != 1 {
+		t.Fatalf("expected cursor at 1 after moving back up, got %d", model.cursor)
+	}
+
+	if model.listViewport != 1 {
+		t.Fatalf("expected viewport to scroll back to 1, got %d", model.listViewport)
+	}
+}
+
+func TestSkillsResizeRecomputesViewport(t *testing.T) {
+	model := testSkillsModel(10, 5)
+	model.cursor = 9
+	model.syncSkillViewport()
+
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
+	model = updated.(*SkillsModel)
+
+	if model.visibleSkillRows() != 2 {
+		t.Fatalf("expected 2 visible rows after resize, got %d", model.visibleSkillRows())
+	}
+
+	if model.listViewport != 8 {
+		t.Fatalf("expected viewport to clamp to 8 after resize, got %d", model.listViewport)
+	}
+
+	start, end := model.visibleSkillRange()
+	if start != 8 || end != 10 {
+		t.Fatalf("expected resized range 8:10, got %d:%d", start, end)
+	}
+	if model.cursor != 9 {
+		t.Fatalf("expected cursor to remain on last skill, got %d", model.cursor)
+	}
+}
+
+func TestSkillsVisibleRangeHandlesShortLists(t *testing.T) {
+	model := testSkillsModel(2, 6)
+
+	start, end := model.visibleSkillRange()
+	if start != 0 || end != 2 {
+		t.Fatalf("expected short list range 0:2, got %d:%d", start, end)
+	}
+
+	view := model.viewSelect()
+	if !strings.Contains(view, "skill-0") || !strings.Contains(view, "skill-1") {
+		t.Fatalf("expected both short-list skills to render, view was:\n%s", view)
+	}
+}
+
+func testSkillsModel(skillCount, visibleRows int) *SkillsModel {
+	allSkills := make([]models.Skill, 0, skillCount)
+	for i := range skillCount {
+		allSkills = append(allSkills, models.Skill{
+			Name: fmt.Sprintf("skill-%d", i),
+			Registry: models.Registry{
+				Type:     models.RegistryTypeLocal,
+				Location: fmt.Sprintf("/tmp/registry-%d", i),
+			},
+		})
+	}
+
+	model := &SkillsModel{
+		allSkills:      allSkills,
+		filteredSkills: allSkills,
+		selectedSkills: map[string]bool{},
+		height:         visibleRows + 6,
+		inputMode:      "navigate",
+		mode:           "select",
+	}
+	model.syncSkillViewport()
+
+	return model
 }

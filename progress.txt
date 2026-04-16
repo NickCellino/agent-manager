@@ -1,0 +1,4 @@
+2026-04-16
+- Completed Task 1: Visible Skills Window.
+- Added viewport state to the skills picker so it only renders visible rows and keeps the selected row on-screen during single-step navigation and terminal resize events.
+- Added focused tests in `internal/tui/skills_test.go` covering viewport ranges, cursor visibility while navigating, resize behavior, and short-list rendering.

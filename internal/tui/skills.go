@@ -34,6 +34,7 @@ type SkillsModel struct {
 	lockFile        *models.LockFile // Lock file for managed skills
 	textInput       textinput.Model
 	cursor          int
+	listViewport    int
 	filter          string
 	mode            string // "select", "confirm-delete", "skill-summary", "skill-summary-loading"
 	inputMode       string // "navigate", "filter"
@@ -150,6 +151,7 @@ func (m *SkillsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.textInput.Width = msg.Width - 20
+		m.syncSkillViewport()
 
 		// Re-initialize glamour renderer if in summary mode
 		if m.mode == "skill-summary" && m.summaryGlamour != nil {
@@ -264,6 +266,7 @@ func (m *SkillsModel) updateNavigateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else if msg.Type == tea.KeyDown && m.cursor < len(m.filteredSkills)-1 {
 			m.cursor++
 		}
+		m.syncSkillViewport()
 		return m, nil
 
 	case tea.KeyEsc:
@@ -284,11 +287,13 @@ func (m *SkillsModel) updateNavigateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.cursor > 0 {
 					m.cursor--
 				}
+				m.syncSkillViewport()
 				return m, nil
 			case 'j':
 				if m.cursor < len(m.filteredSkills)-1 {
 					m.cursor++
 				}
+				m.syncSkillViewport()
 				return m, nil
 			case 'i':
 				// Show skill info/summary
@@ -440,6 +445,8 @@ func (m *SkillsModel) applyFilter() {
 	if m.filter == "" {
 		m.filteredSkills = m.allSkills
 		m.cursor = 0
+		m.listViewport = 0
+		m.syncSkillViewport()
 		return
 	}
 
@@ -457,6 +464,79 @@ func (m *SkillsModel) applyFilter() {
 		}
 	}
 	m.cursor = 0
+	m.listViewport = 0
+	m.syncSkillViewport()
+}
+
+func (m *SkillsModel) visibleSkillRows() int {
+	if m.height <= 0 {
+		if len(m.filteredSkills) == 0 {
+			return 1
+		}
+		return len(m.filteredSkills)
+	}
+
+	rows := m.height - 6
+	if rows < 1 {
+		return 1
+	}
+
+	return rows
+}
+
+func (m *SkillsModel) visibleSkillRange() (int, int) {
+	if len(m.filteredSkills) == 0 {
+		return 0, 0
+	}
+
+	m.syncSkillViewport()
+
+	start := m.listViewport
+	end := start + m.visibleSkillRows()
+	if end > len(m.filteredSkills) {
+		end = len(m.filteredSkills)
+	}
+
+	return start, end
+}
+
+func (m *SkillsModel) syncSkillViewport() {
+	if len(m.filteredSkills) == 0 {
+		m.cursor = 0
+		m.listViewport = 0
+		return
+	}
+
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.cursor >= len(m.filteredSkills) {
+		m.cursor = len(m.filteredSkills) - 1
+	}
+
+	rows := m.visibleSkillRows()
+	maxViewport := len(m.filteredSkills) - rows
+	if maxViewport < 0 {
+		maxViewport = 0
+	}
+
+	if m.listViewport < 0 {
+		m.listViewport = 0
+	}
+	if m.listViewport > maxViewport {
+		m.listViewport = maxViewport
+	}
+
+	if m.cursor < m.listViewport {
+		m.listViewport = m.cursor
+	}
+	if m.cursor >= m.listViewport+rows {
+		m.listViewport = m.cursor - rows + 1
+	}
+
+	if m.listViewport > maxViewport {
+		m.listViewport = maxViewport
+	}
 }
 
 func (m *SkillsModel) saveSelections() error {
@@ -530,7 +610,9 @@ func (m *SkillsModel) viewSelect() string {
 	if len(m.filteredSkills) == 0 {
 		b.WriteString("  No skills found\n")
 	} else {
-		for i, skill := range m.filteredSkills {
+		start, end := m.visibleSkillRange()
+		for i := start; i < end; i++ {
+			skill := m.filteredSkills[i]
 			cursor := "  "
 			if i == m.cursor {
 				cursor = "> "
