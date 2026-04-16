@@ -8,7 +8,7 @@
 
 - [x] Task 1: Visible Skills Window
 - [x] Task 2: Page-Stride Navigation
-- [ ] Task 3: Viewport Context Footer
+- [x] Task 3: Viewport Context Footer
 
 ## Task 1: Visible Skills Window
 
@@ -74,11 +74,11 @@ Add footer context for the scrollable skills picker described in the PRD's Solut
 
 **Acceptance criteria**
 
-- [ ] The footer includes a 1-based inclusive visible-range line in the form `a-b of N shown` based on the filtered result set.
-- [ ] The existing selection summary remains global as `selected/all skills selected`, even when a filter is active.
-- [ ] When the filtered result set is empty, the UI still shows a stable range line such as `0 of 0 shown`.
-- [ ] The visible-range values stay correct while navigating, filtering, and resizing.
-- [ ] Focused tests cover unfiltered, filtered, and empty-result footer states.
+- [x] The footer includes a 1-based inclusive visible-range line in the form `a-b of N shown` based on the filtered result set.
+- [x] The existing selection summary remains global as `selected/all skills selected`, even when a filter is active.
+- [x] When the filtered result set is empty, the UI still shows a stable range line such as `0 of 0 shown`.
+- [x] The visible-range values stay correct while navigating, filtering, and resizing.
+- [x] Focused tests cover unfiltered, filtered, and empty-result footer states.
 
 **Blocked by**
 

@@ -232,6 +232,74 @@ func TestSkillsFilterModeKeepsHLAsTextInput(t *testing.T) {
 	}
 }
 
+func TestSkillsFooterShowsVisibleRangeForUnfilteredList(t *testing.T) {
+	model := testSkillsModel(10, 4)
+	model.cursor = 5
+	model.syncSkillViewport()
+
+	view := model.viewSelect()
+	if !strings.Contains(view, "3-6 of 10 shown") {
+		t.Fatalf("expected visible range footer for unfiltered list, view was:\n%s", view)
+	}
+
+	if !strings.Contains(view, "0/10 skills selected") {
+		t.Fatalf("expected global selection summary, view was:\n%s", view)
+	}
+}
+
+func TestSkillsFooterShowsVisibleRangeForFilteredList(t *testing.T) {
+	model := testSkillsModel(10, 4)
+	model.filter = "skill-1"
+	model.applyFilter()
+
+	if len(model.filteredSkills) != 1 {
+		t.Fatalf("expected one filtered skill, got %d", len(model.filteredSkills))
+	}
+
+	view := model.viewSelect()
+	if !strings.Contains(view, "1-1 of 1 shown") {
+		t.Fatalf("expected filtered visible range footer, view was:\n%s", view)
+	}
+
+	if !strings.Contains(view, "0/10 skills selected") {
+		t.Fatalf("expected global selection summary to use all skills, view was:\n%s", view)
+	}
+}
+
+func TestSkillsFooterShowsStableEmptyState(t *testing.T) {
+	model := testSkillsModel(10, 4)
+	model.filter = "no-match"
+	model.applyFilter()
+
+	view := model.viewSelect()
+	if !strings.Contains(view, "0 of 0 shown") {
+		t.Fatalf("expected empty-state range footer, view was:\n%s", view)
+	}
+
+	if !strings.Contains(view, "0/10 skills selected") {
+		t.Fatalf("expected global selection summary during empty state, view was:\n%s", view)
+	}
+}
+
+func TestSkillsFooterUpdatesRangeWhileNavigatingAndResizing(t *testing.T) {
+	model := testSkillsModel(10, 4)
+	model.cursor = 9
+	model.syncSkillViewport()
+
+	view := model.viewSelect()
+	if !strings.Contains(view, "7-10 of 10 shown") {
+		t.Fatalf("expected range footer before resize, view was:\n%s", view)
+	}
+
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
+	model = updated.(*SkillsModel)
+
+	view = model.viewSelect()
+	if !strings.Contains(view, "9-10 of 10 shown") {
+		t.Fatalf("expected resized range footer, view was:\n%s", view)
+	}
+}
+
 func testSkillsModel(skillCount, visibleRows int) *SkillsModel {
 	allSkills := make([]models.Skill, 0, skillCount)
 	for i := range skillCount {

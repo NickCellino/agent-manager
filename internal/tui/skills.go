@@ -515,6 +515,15 @@ func (m *SkillsModel) visibleSkillRange() (int, int) {
 	return start, end
 }
 
+func (m *SkillsModel) visibleSkillRangeSummary() string {
+	if len(m.filteredSkills) == 0 {
+		return "0 of 0 shown"
+	}
+
+	start, end := m.visibleSkillRange()
+	return fmt.Sprintf("%d-%d of %d shown", start+1, end, len(m.filteredSkills))
+}
+
 func (m *SkillsModel) syncSkillViewport() {
 	if len(m.filteredSkills) == 0 {
 		m.cursor = 0
@@ -650,7 +659,8 @@ func (m *SkillsModel) viewSelect() string {
 	}
 
 	// Stats
-	b.WriteString(fmt.Sprintf("\n%d/%d skills selected\n", len(m.selectedSkills), len(m.allSkills)))
+	b.WriteString("\n" + m.visibleSkillRangeSummary() + "\n")
+	b.WriteString(fmt.Sprintf("%d/%d skills selected\n", len(m.selectedSkills), len(m.allSkills)))
 
 	// Help - different based on input mode
 	if m.inputMode == "filter" {

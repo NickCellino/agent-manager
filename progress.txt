@@ -5,3 +5,6 @@
 - Completed Task 2: Page-Stride Navigation.
 - Added navigate-mode `h/l` and `H/L` paging in `internal/tui/skills.go` using the current visible row count, with clamping at list bounds and no impact on filter-mode text entry.
 - Updated the skills help footer and added focused tests covering forward/backward page jumps, uppercase aliases, clamping, and filter-vs-navigate behavior.
+- Completed Task 3: Viewport Context Footer.
+- Added a filtered-result range footer in `internal/tui/skills.go` that reports `a-b of N shown`, preserves the global `selected/all` summary, and keeps a stable `0 of 0 shown` empty state.
+- Added focused tests in `internal/tui/skills_test.go` covering unfiltered, filtered, empty-result, navigation, and resize footer states.
