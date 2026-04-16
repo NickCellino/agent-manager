@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"agent-manager/internal/models"
@@ -151,6 +152,86 @@ func TestSkillsVisibleRangeHandlesShortLists(t *testing.T) {
 	}
 }
 
+func TestSkillsPageStrideNavigationClampsAtBounds(t *testing.T) {
+	model := testSkillsModel(10, 4)
+
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	model = updated.(*SkillsModel)
+
+	if model.cursor != 4 {
+		t.Fatalf("expected lowercase l to move cursor to 4, got %d", model.cursor)
+	}
+
+	if model.listViewport != 1 {
+		t.Fatalf("expected viewport to follow paged cursor to 1, got %d", model.listViewport)
+	}
+
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'L'}})
+	model = updated.(*SkillsModel)
+
+	if model.cursor != 8 {
+		t.Fatalf("expected uppercase L to move cursor to 8, got %d", model.cursor)
+	}
+
+	if model.listViewport != 5 {
+		t.Fatalf("expected viewport to follow paged cursor to 5, got %d", model.listViewport)
+	}
+
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	model = updated.(*SkillsModel)
+
+	if model.cursor != 9 {
+		t.Fatalf("expected forward paging to clamp at last item, got %d", model.cursor)
+	}
+
+	if model.listViewport != 6 {
+		t.Fatalf("expected viewport to clamp at 6, got %d", model.listViewport)
+	}
+
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'H'}})
+	model = updated.(*SkillsModel)
+
+	if model.cursor != 5 {
+		t.Fatalf("expected uppercase H to move cursor back to 5, got %d", model.cursor)
+	}
+
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	model = updated.(*SkillsModel)
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	model = updated.(*SkillsModel)
+
+	if model.cursor != 0 {
+		t.Fatalf("expected backward paging to clamp at first item, got %d", model.cursor)
+	}
+
+	if model.listViewport != 0 {
+		t.Fatalf("expected viewport to clamp back to 0, got %d", model.listViewport)
+	}
+}
+
+func TestSkillsFilterModeKeepsHLAsTextInput(t *testing.T) {
+	model := testSkillsModel(6, 3)
+	model.inputMode = "filter"
+	model.textInput.Focus()
+
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	model = updated.(*SkillsModel)
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	model = updated.(*SkillsModel)
+
+	if model.textInput.Value() != "hl" {
+		t.Fatalf("expected filter input to capture hl, got %q", model.textInput.Value())
+	}
+
+	if model.cursor != 0 {
+		t.Fatalf("expected filter typing not to page cursor, got %d", model.cursor)
+	}
+
+	if model.listViewport != 0 {
+		t.Fatalf("expected filter typing not to change viewport, got %d", model.listViewport)
+	}
+}
+
 func testSkillsModel(skillCount, visibleRows int) *SkillsModel {
 	allSkills := make([]models.Skill, 0, skillCount)
 	for i := range skillCount {
@@ -163,10 +244,16 @@ func testSkillsModel(skillCount, visibleRows int) *SkillsModel {
 		})
 	}
 
+	ti := textinput.New()
+	ti.Placeholder = "type to filter..."
+	ti.CharLimit = 156
+	ti.Prompt = ""
+
 	model := &SkillsModel{
 		allSkills:      allSkills,
 		filteredSkills: allSkills,
 		selectedSkills: map[string]bool{},
+		textInput:      ti,
 		height:         visibleRows + 6,
 		inputMode:      "navigate",
 		mode:           "select",

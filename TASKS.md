@@ -7,7 +7,7 @@
 ## Task Checklist
 
 - [x] Task 1: Visible Skills Window
-- [ ] Task 2: Page-Stride Navigation
+- [x] Task 2: Page-Stride Navigation
 - [ ] Task 3: Viewport Context Footer
 
 ## Task 1: Visible Skills Window
@@ -47,11 +47,11 @@ Add page-stride keyboard navigation for the skills picker on top of the visible-
 
 **Acceptance criteria**
 
-- [ ] Pressing `h/l` moves the selected skill backward or forward by the current visible row count and clamps correctly at the list bounds.
-- [ ] Pressing `H/L` behaves the same as lowercase in navigate mode.
-- [ ] While the filter input is focused, `h` and `l` are treated as text input and do not trigger paging.
-- [ ] The navigate-mode help text documents the new page-stride controls.
-- [ ] Focused tests cover forward and backward page jumps, clamping behavior, and the navigate-vs-filter mode distinction.
+- [x] Pressing `h/l` moves the selected skill backward or forward by the current visible row count and clamps correctly at the list bounds.
+- [x] Pressing `H/L` behaves the same as lowercase in navigate mode.
+- [x] While the filter input is focused, `h` and `l` are treated as text input and do not trigger paging.
+- [x] The navigate-mode help text documents the new page-stride controls.
+- [x] Focused tests cover forward and backward page jumps, clamping behavior, and the navigate-vs-filter mode distinction.
 
 **Blocked by**
 

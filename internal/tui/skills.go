@@ -283,6 +283,12 @@ func (m *SkillsModel) updateNavigateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.inputMode = "filter"
 				m.textInput.Focus()
 				return m, textinput.Blink
+			case 'h', 'H':
+				m.pageSkills(-m.visibleSkillRows())
+				return m, nil
+			case 'l', 'L':
+				m.pageSkills(m.visibleSkillRows())
+				return m, nil
 			case 'k':
 				if m.cursor > 0 {
 					m.cursor--
@@ -307,6 +313,15 @@ func (m *SkillsModel) updateNavigateMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *SkillsModel) pageSkills(delta int) {
+	if len(m.filteredSkills) == 0 || delta == 0 {
+		return
+	}
+
+	m.cursor += delta
+	m.syncSkillViewport()
 }
 
 // loadSkillSummary loads or generates a summary for the given skill
@@ -641,7 +656,7 @@ func (m *SkillsModel) viewSelect() string {
 	if m.inputMode == "filter" {
 		b.WriteString("\n" + listHelpStyle.Render("esc: exit filter  type to search"))
 	} else {
-		b.WriteString("\n" + listHelpStyle.Render("/: filter  ↑/↓/j/k: navigate  space: toggle  i: info  enter: save  esc: cancel"))
+		b.WriteString("\n" + listHelpStyle.Render("/: filter  ↑/↓/j/k: navigate  h/l: page  space: toggle  i: info  enter: save  esc: cancel"))
 	}
 
 	return b.String()
